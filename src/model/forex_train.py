@@ -612,5 +612,5 @@ def main(_):
 if __name__ == "__main__":
 	# tf.app.run()
 	# read_data(SOURCE_PATH+CSV_NAME)
-	# train()
-	self_test()
+	train()
+	# self_test()
