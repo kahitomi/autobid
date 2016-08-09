@@ -1,0 +1,17 @@
+*.pyc
+*/*.pyc
+
+*.orig
+*/*.orig
+
+*.model
+*/*.model
+
+*.npy
+*/*.npy
+
+*.csv
+src/data/forex/*
+src/model/forex/*
+
+common/config.py
