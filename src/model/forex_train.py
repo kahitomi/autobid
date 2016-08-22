@@ -82,10 +82,10 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate dec
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
-tf.app.flags.DEFINE_integer("batch_size", 2, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
 # tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 200, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 500, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
@@ -150,11 +150,11 @@ def read_data(source_path, max_size=None, test=None):
 		data_set.append(second_prices)
 		counter += 1
 
-		###########
-		# FOR TEST
-		###########
-		if counter > ((bucket[0]+bucket[1])*BASE_LENGTH+200):
-			break
+		# ###########
+		# # FOR TEST
+		# ###########
+		# if counter > ((bucket[0]+bucket[1])*BASE_LENGTH+200):
+		# 	break
 
 
 
@@ -394,7 +394,7 @@ def train():
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
 				checkpoint_path = os.path.join(FLAGS.train_dir, "forex.ckpt")
-				model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+				# model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
 				accuracy = 0.0
 				# Run evals on development set and print their perplexity.
