@@ -21,7 +21,7 @@ output_path = "src/data/forex/"
 
 
 PRICE_SCALE = 15
-SECOND_VOLUME = 3
+SECOND_VOLUME = 2
 
 
 

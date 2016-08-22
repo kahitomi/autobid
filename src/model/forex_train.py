@@ -41,14 +41,14 @@ if ACTION == "train":
 	SAVE_NAME = CSV_NAME.split(".")[0]
 
 if ACTION == "test":
-	TEST_CSV_NAME = "NZDUSD-2016-06.csv"
-	if len(sys.argv) >= 3:
-		TEST_CSV_NAME = sys.argv[2]
+	TEST_CSV_NAME = "NZDUSD-2016-06-day1-test.csv"
+	if len(sys.argv) >= 4:
+		TEST_CSV_NAME = sys.argv[3]
 
-	if len(sys.argv) < 4:
+	if len(sys.argv) < 3:
 		raise ValueError("Please enter the model name")
 	else:
-		SAVE_NAME = sys.argv[3]
+		SAVE_NAME = sys.argv[2]
 
 
 SOURCE_PATH = "src/data/forex/"
@@ -56,11 +56,11 @@ SOURCE_PATH = "src/data/forex/"
 
 
 
-SECOND_VOLUME = 3*2 # values/second
+SECOND_VOLUME = 2*2 # values/second
 BASE_LENGTH = 10 # seconds
 
-NUMBER_SPLIT = 50
-BASIC_SPLIT = 0.00001
+NUMBER_SPLIT = 24
+BASIC_SPLIT = 0.00002
 
 
 sess_config = tf.ConfigProto()
@@ -71,7 +71,7 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (10, 5)
+_buckets = (60, 24)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
@@ -82,10 +82,10 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate dec
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
-tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 50, "Batch size to use during training.")
 # tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 500, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 200, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
@@ -97,7 +97,7 @@ tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
 # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 18000, "How many training steps to do per checkpoint.")
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 100, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -241,7 +241,7 @@ def create_model(session, forward_only):
 			print("New Learning Rate: ",model.learning_rate.eval(session=session))
 
 	else:
-		print("Created model with fresh parameters.")
+		print("Creating model with fresh parameters.")
 		session.run(tf.initialize_all_variables())
 
 	
@@ -264,6 +264,22 @@ def number_to_bools(n, base_n):
 
 	return v_bools
 
+def bools_to_number(bool_list):
+	n = 0.0
+	for x in range(len(bool_list)):
+		if bool_list[x] == 1.0:
+			n = float(x-int(NUMBER_SPLIT/2))*BASIC_SPLIT
+			break
+	return n
+
+
+def output_to_number(output):
+	number_list = []
+	for x in range(BASE_LENGTH*SECOND_VOLUME):
+		block = output[ (x*NUMBER_SPLIT) : ((x+1)*NUMBER_SPLIT) ]
+		number_list.append( bools_to_number(block) )
+	return number_list
+
 
 def block_to_input(block, start_bid_price, start_ask_price):
 	input_list = []
@@ -275,6 +291,8 @@ def block_to_input(block, start_bid_price, start_ask_price):
 				input_list += number_to_bools(n,start_ask_price)
 
 	return input_list
+
+
 
 
 
@@ -295,9 +313,6 @@ def train():
 		print ("Reading development and training data.")
 
 		train_set = read_data(SOURCE_PATH+CSV_NAME)
-
-		train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
-		train_total_size = float(sum(train_bucket_sizes))
 
 
 		# This is the training loop.
@@ -394,7 +409,7 @@ def train():
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
 				checkpoint_path = os.path.join(FLAGS.train_dir, "forex.ckpt")
-				# model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+				model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
 				accuracy = 0.0
 				# Run evals on development set and print their perplexity.
@@ -574,157 +589,156 @@ def decode(questions):
 
 
 def self_test():
-	"""Test the translation model."""
+	"""Test the model."""
 	with tf.Session() as sess:
-		print("Self-test for Seq2seq model.")
+		print("Test for Forex model.")
 		# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
 		model = create_model(sess, True)
 
-		# model.batch_size = 100
+		model.batch_size = 10
 
 		test_set = read_data(SOURCE_PATH+TEST_CSV_NAME)
 
-		test_bucket_sizes = [len(test_set[b]) for b in xrange(len(_buckets))]
-		test_total_size = float(sum(test_bucket_sizes))
-		test_buckets_scale = [sum(test_bucket_sizes[:i + 1]) / test_total_size
-													 for i in xrange(len(test_bucket_sizes))]
-		bucket_id = 0
-		i = 0
-		loss = 0.0
-		epo = 10.0
-		error = 0.0
-		sub_error = np.zeros([_buckets[0][1]-1])
-		while i <= epo:
-			# encoder_inputs, decoder_inputs, target_weights = model.get_batch_seq(test_set, bucket_id, BASE_LENGTH)
-			encoder_inputs, decoder_inputs, target_weights = model.get_batch(test_set, bucket_id)
+		# 24 picese wheel
+		data_size = len(test_set)
+		wheel_part_number = 24
+		wheel = [ (data_size/wheel_part_number)*(x+1) for x in range(wheel_part_number)]
+
+
+		final_accu_collect = [ [] for x in range(wheel_part_number) ]
+		final_error_collect = [ [] for x in range(wheel_part_number) ]
+
+		epo = 10.0*wheel_part_number
+		epo_counter = 0
+		while epo_counter <= epo:
+			seed_wheel = random.randint(0, wheel_part_number-1)
+			# data random choose
+			encoder_inputs = [ [] for x in range(bucket[0]) ]
+			decoder_inputs = [ [] for x in range(bucket[1]) ]
+			for x in range(model.batch_size):
+				# print(seed_wheel)
+				# print(wheel[seed_wheel] - data_size/wheel_part_number)
+				# print(wheel[seed_wheel]-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
+				seed = random.randint(
+						int(wheel[seed_wheel] - data_size/wheel_part_number),
+						int(wheel[seed_wheel]-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
+					)
+
+				start_bid_price = test_set[seed][0]
+				start_ask_price = test_set[seed][int(SECOND_VOLUME/2)]
+
+				for i in range(bucket[0]):
+					block = test_set[ (seed+i*BASE_LENGTH) : (seed+(i+1)*BASE_LENGTH)]
+					encoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
+				for i in range(bucket[1]):
+					block = test_set[ (seed+(bucket[0]+i)*BASE_LENGTH) : (seed+(bucket[0]+i+1)*BASE_LENGTH)]
+					decoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
+
+			decoder_inputs = decoder_inputs[:-1]
+			# add GO symble
+			decoder_inputs = [[[0.0 for x in range(model.input_size)] for x in range(model.batch_size)]] + decoder_inputs
+
+
+
+
+
 			#test
-			stepout = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, True)
-			# _gn, step_loss, _ = model.step(sess, encoder_inputs_list, decoder_inputs_list, target_weights_list, bucket_id, False)
+			stepout = model.step(sess, encoder_inputs, decoder_inputs, True)
 
-			# print("Gradient norm",stepout[0])
-			# print("step_loss",stepout[1])
-			# print ("-----STEP TIME",time.time()-start_time)
+			p_out = np.array(stepout[2])
+			t_out = np.array(decoder_inputs)
 
-			# print (len(stepout[2]))
-			# print (len(stepout[2][0]))
-			# print (len(stepout[2][0][0]))
+			p_out = p_out[:-1]
+			t_out = t_out[1:]
+
+			# Error calculate
+			p_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
+			t_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
+			for step in range(bucket[1]-1):
+				for batch_number in range(model.batch_size):
+					p_price[step][batch_number] = output_to_number(p_out[step][batch_number])
+					t_price[step][batch_number] = output_to_number(t_out[step][batch_number])
+			# print(np.array(p_price).shape)
+			# print(np.array(t_price).shape)
+
+			error_price = np.absolute(np.array(p_price)-np.array(t_price))
+			error_price = np.average(error_price, axis=1)
+			error_price = np.average(error_price, axis=1)
+
+			# print(p_price[-1][0])
+
+			# print(np.array(t_price).shape)
+
+			final_error_collect[seed_wheel].append(error_price)
 
 
+			# start_bid_price = test_set[seed][0]
+			# start_ask_price = test_set[seed][int(SECOND_VOLUME/2)]
 
-			predict_result = np.array(stepout[2])[1:]
-			target_result = np.array(decoder_inputs)[1:]
-
-
-			# print (predict_result.shape)
-			# print (target_result.shape)
-
-			error_result = target_result-predict_result
-			error_result = np.absolute(error_result)
-			sub_error_result = np.average(error_result, axis=1)
-			sub_error_result = np.average(sub_error_result, axis=1)
+			# output_to_number(output)
 
 
-			sub_error += sub_error_result/epo
+			
+			# Accuracy calculate
 
-			# print(error_result.shape)
-			error_result = np.average(error_result, axis=0)
-			# print(error_result.shape)
-			error_result = np.average(error_result, axis=1)
-			# print(error_result.shape)
-			_error = np.average(error_result,)
+			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
+			label_target = np.array(t_out)
 
-			# print (error_result)
-			# print (_error)
-			# print (error_result.shape)
+			results = np.equal(label_predict,label_target)
+			results = np.sum(results, axis=2)
+			results = (results == model.output_size).astype(int)
 
-			error += _error/epo
+			# print (np.sum(results, axis=1)/float(model.batch_size))
+			# print (results.shape)
+
+			true_accuracy = np.sum(results, axis=1)/float(model.batch_size)
+
+			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+
+			final_accu_collect[seed_wheel].append(true_accuracy)
+			# accuracy += true_accuracy / FLAGS.steps_per_checkpoint
 
 
 
 			# break
 
-			i+=1
-			continue
+			epo_counter+=1
+			
 
+		final_error = []
+		for x in final_error_collect:
+			if len(x) == 0:
+				final_error.append([0.0 for _ in range(bucket[1]-1)])
+			else:
+				x = np.array(x)
+				err = np.average(x, axis=0)
+				final_error.append(err)
 
+		final_accu = []
+		for x in final_accu_collect:
+			if len(x) == 0:
+				final_accu.append([0.0 for _ in range(bucket[1]-1)])
+			else:
+				x = np.array(x)
+				accu = np.average(x, axis=0)
+				final_accu.append(accu)
 
-
-			# predict_result = []
-			# target_result = []
-			# for x in range(model.batch_size):
-			# 	p_value = 0.0
-			# 	t_value = 0.0
-
-			# 	for y in range(_buckets[0][1]):
-			# 		for v in stepout[2][y][x]:
-			# 			if v == 0.0:
-			# 				continue
-			# 			if p_value == 0.0:
-			# 				p_value = v
-			# 				continue
-			# 			p_value *= v
-			# 			# print(p_value)
-			# 			# if p_value == float('Inf'):
-			# 			# 	break
-			# 		for v in decoder_inputs[y][x]:
-			# 			if v == 0.0:
-			# 				continue
-			# 			if t_value == 0.0:
-			# 				t_value = v
-			# 				continue
-			# 			t_value *= v
-
-			# 	predict_result.append(p_value)
-			# 	target_result.append(t_value)
-
-			# print (predict_result)
-			# print (target_result)
-			# error_list = [target_result[x]-predict_result[x] for x in range(model.batch_size)]
-			# _error = sum(error_list)/len(error_list)/epo
-			# if _error == float('Inf'):
-			# 	error += 100.0/epo
-			# 	continue
-			# error += _error
-
-
-		# print (stepout[2][0][0][:5])
-		# print (decoder_inputs[0][0][:5])
-		print (stepout[2][1][0][:5])
-		print (decoder_inputs[1][0][:5])
-		print (stepout[2][2][0][:5])
-		print (decoder_inputs[2][0][:5])
-		print (stepout[2][3][0][:5])
-		print (decoder_inputs[3][0][:5])
-		print (stepout[2][4][0][:5])
-		print (decoder_inputs[4][0][:5])
-
-		# print (stepout[2][0][1][:5])
-		# print (decoder_inputs[0][1][:5])
-		# print (stepout[2][1][1][:5])
-		# print (decoder_inputs[1][1][:5])
-		# print (stepout[2][2][1][:5])
-		# print (decoder_inputs[2][1][:5])
-		# print (stepout[2][3][1][:5])
-		# print (decoder_inputs[3][1][:5])
-		# print (stepout[2][4][1][:5])
-		# print (decoder_inputs[4][1][:5])
-
-		# print (stepout[2][0][2][:5])
-		# print (decoder_inputs[0][2][:5])
-		# print (stepout[2][1][2][:5])
-		# print (decoder_inputs[1][2][:5])
-		# print (stepout[2][2][2][:5])
-		# print (decoder_inputs[2][2][:5])
-		# print (stepout[2][3][2][:5])
-		# print (decoder_inputs[3][2][:5])
-		# print (stepout[2][4][2][:5])
-		# print (decoder_inputs[4][2][:5])
-
-
-		print ("=====FINAL   ERROR=====",error)
 		# print ("=====FINAL UP DOWN=====",error)
-		print ("=====MINUTES ERROR=====")
-		print (sub_error)
+		print ("=====SUB   ACCU=====")
+		for x in range(len(final_accu)):
+			print ("#",x,"#",final_accu[x])
+
+		print ("=====FINAL ACCU=====")
+		ACCU = [ np.average(np.array(x)) for x in final_accu]
+		print (np.average(np.array(ACCU)))
+
+		print ("=====SUB   ERRO=====")
+		for x in range(len(final_error)):
+			print ("#",x,"#",final_error[x])
+
+		print ("=====FINAL ERRO=====")
+		ERRO = [ np.average(np.array(x)) for x in final_error]
+		print (np.average(np.array(ERRO)))
 
 
 def model_test():
