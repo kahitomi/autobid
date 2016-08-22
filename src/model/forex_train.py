@@ -393,8 +393,8 @@ def train():
 					sess.run(model.learning_rate_decay_op)
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
-				checkpoint_path = os.path.join(FLAGS.train_dir, "mindflow.ckpt")
-				# model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+				checkpoint_path = os.path.join(FLAGS.train_dir, "forex.ckpt")
+				model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
 				accuracy = 0.0
 				# Run evals on development set and print their perplexity.
