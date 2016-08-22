@@ -22,28 +22,45 @@ from tensorflow.python.ops import variable_scope
 # from common import tf_serving
 # from tensorflow_serving.session_bundle import exporter
 
-import tf_seq2seq as seq2seq_model
+import seq2seq as seq2seq_model
 # from IAS import tf_seq2seq_one2one as seq2seq_model
 # from IAS import word2vec, word_segmentation
 
 # from common import config
 
 if len(sys.argv) < 2:
-	raise ValueError("Please enter the source forex csv file name which should be in src/data/")
+	raise ValueError("Please enter the action [train, test]")
 
-CSV_NAME = sys.argv[1]
-TEST_CSV_NAME = "NZDUSD-2016-06.csv"
+ACTION = sys.argv[1]
+
+if ACTION == "train":
+	if len(sys.argv) < 3:
+		raise ValueError("Please enter the source forex csv file name which should be in src/data/")
+
+	CSV_NAME = sys.argv[2]
+	SAVE_NAME = CSV_NAME.split(".")[0]
+
+if ACTION == "test":
+	TEST_CSV_NAME = "NZDUSD-2016-06.csv"
+	if len(sys.argv) >= 3:
+		TEST_CSV_NAME = sys.argv[2]
+
+	if len(sys.argv) < 4:
+		raise ValueError("Please enter the model name")
+	else:
+		SAVE_NAME = sys.argv[3]
+
 
 SOURCE_PATH = "src/data/forex/"
 
-if len(sys.argv) < 3:
-	SAVE_NAME = CSV_NAME.split(".")[0]
-else:
-	SAVE_NAME = sys.argv[2]
 
 
-SECOND_VOLUME = 6 # values/second
-BASE_LENGTH = 60 # seconds
+
+SECOND_VOLUME = 3*2 # values/second
+BASE_LENGTH = 10 # seconds
+
+NUMBER_SPLIT = 50
+BASIC_SPLIT = 0.00001
 
 
 sess_config = tf.ConfigProto()
@@ -54,8 +71,8 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = [(15, 5)]
-
+_buckets = (10, 5)
+bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
@@ -65,20 +82,22 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate dec
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
-tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 2, "Batch size to use during training.")
+# tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", BASE_LENGTH*SECOND_VOLUME, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 200, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
-tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 18000, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 18000, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 100, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -126,15 +145,18 @@ def read_data(source_path, max_size=None, test=None):
  
 
 	# 直接转入data
+	data_set = []
 	for second_prices in reader:
-		data_set[0].append(second_prices)
+		data_set.append(second_prices)
 		counter += 1
 
 		###########
 		# FOR TEST
 		###########
-		# if counter > 1400:
-		# 	break
+		if counter > ((bucket[0]+bucket[1])*BASE_LENGTH+200):
+			break
+
+
 
 
 	# # 变换到基本长度
@@ -177,6 +199,12 @@ def read_data(source_path, max_size=None, test=None):
 
 	# 	counter += 1
 
+	# 	###########
+	# 	# FOR TEST
+	# 	###########
+	# 	if counter > 200:
+	# 		break
+
 
 
 
@@ -195,7 +223,6 @@ def create_model(session, forward_only):
 			FLAGS.source_vocab_size, FLAGS.target_vocab_size, _buckets,
 			FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
 			FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
-			num_samples = 512,
 			forward_only=forward_only)
 	ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
 	if ckpt:
@@ -203,13 +230,15 @@ def create_model(session, forward_only):
 		print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
 		model.saver.restore(session, ckpt.model_checkpoint_path)
 
-		# if not forward_only:
-		# 	# set new learning rate
-		# 	new_learning_rate = tf.Variable(float(FLAGS.learning_rate), trainable=False)
-		# 	op = tf.assign(model.learning_rate, new_learning_rate)
-		# 	op_init = tf.initialize_variables([new_learning_rate])
-		# 	session.run([op_init,op])
-		# 	print("New Learning Rate: ",model.learning_rate.eval(session=session))
+		if not forward_only:
+			# set new learning rate
+			print("Old Learning Rate: ",model.learning_rate.eval(session=session))
+			new_learning_rate = tf.Variable(float(FLAGS.learning_rate), trainable=False)
+			op = tf.assign(model.learning_rate, new_learning_rate)
+			op_init = tf.initialize_variables([new_learning_rate])
+			session.run([op_init])
+			session.run([op])
+			print("New Learning Rate: ",model.learning_rate.eval(session=session))
 
 	else:
 		print("Created model with fresh parameters.")
@@ -218,6 +247,35 @@ def create_model(session, forward_only):
 	
 
 	return model
+
+
+
+def number_to_bools(n, base_n):
+	v = float(n) - float(base_n)
+	v = int(v/BASIC_SPLIT)
+	v += int(NUMBER_SPLIT/2)
+	if v >= NUMBER_SPLIT:
+		v = NUMBER_SPLIT-1
+	if v < 0:
+		v = 0
+	v_bools = [0.0 for x in range(NUMBER_SPLIT)]
+	# print(v,"/",len(v_bools))
+	v_bools[v] = 1.0
+
+	return v_bools
+
+
+def block_to_input(block, start_bid_price, start_ask_price):
+	input_list = []
+	for b in block:
+		for n in b:
+			if n < SECOND_VOLUME/2:
+				input_list += number_to_bools(n,start_bid_price)
+			else:
+				input_list += number_to_bools(n,start_ask_price)
+
+	return input_list
+
 
 
 def train():
@@ -233,55 +291,52 @@ def train():
 		print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
 		model = create_model(sess, False)
 
-		# checkpoint_path = os.path.join(FLAGS.train_dir, "mindflow.ckpt")
-		# model.saver.save(sess, checkpoint_path, global_step=model.global_step)
-
 		# Read data into buckets and compute their sizes.
-		print ("Reading development and training data (limit: %d)."
-					 % FLAGS.max_train_data_size)
-
-		# # Set logs writer into folder /tmp/tensorflow_logs
-		# summary_writer = tf.train.SummaryWriter('/tmp/tensorflow_logs', graph_def=sess.graph_def)
+		print ("Reading development and training data.")
 
 		train_set = read_data(SOURCE_PATH+CSV_NAME)
 
 		train_bucket_sizes = [len(train_set[b]) for b in xrange(len(_buckets))]
 		train_total_size = float(sum(train_bucket_sizes))
 
-		# A bucket scale is a list of increasing numbers from 0 to 1 that we'll use
-		# to select a bucket. Length of [scale[i], scale[i+1]] is proportional to
-		# the size if i-th training bucket, as used later.
-		train_buckets_scale = [sum(train_bucket_sizes[:i + 1]) / train_total_size
-													 for i in xrange(len(train_bucket_sizes))]
 
 		# This is the training loop.
 		step_time, loss = 0.0, 0.0
+		accuracy = 0.0
 		step_time_mini = 0.0
 		current_step = 0
 		previous_losses = []
+		data_set_size = len(train_set)
 		while True:
-			# print("current_step",current_step)
-			# Choose a bucket according to data distribution. We pick a random number
-			# in [0, 1] and use the corresponding interval in train_buckets_scale.
-			random_number_01 = np.random.random_sample()
-			bucket_id = min([i for i in xrange(len(train_buckets_scale))
-											 if train_buckets_scale[i] > random_number_01])
-
 			# Get a batch and make a step.
 			start_time = time.time()
-			# print("bucket_id",bucket_id)
 
-			# get train data
-			# encoder_inputs_list = []
-			# decoder_inputs_list = []
-			# target_weights_list = []
-			# for task_num in range(TASK_NUM):
-			get_start = time.time()
-			encoder_inputs, decoder_inputs, target_weights = model.get_batch_seq(train_set, bucket_id, BASE_LENGTH)
-			# print ("get batch time",time.time()-get_start)
+
+			# data random choose
+			encoder_inputs = [ [] for x in range(bucket[0]) ]
+			decoder_inputs = [ [] for x in range(bucket[1]) ]
+			for x in range(model.batch_size):
+				seed = random.randint(0, data_set_size-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
+
+				start_bid_price = train_set[seed][0]
+				start_ask_price = train_set[seed][int(SECOND_VOLUME/2)]
+
+				for i in range(bucket[0]):
+					block = train_set[ (seed+i*BASE_LENGTH) : (seed+(i+1)*BASE_LENGTH)]
+					encoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
+				for i in range(bucket[1]):
+					block = train_set[ (seed+(bucket[0]+i)*BASE_LENGTH) : (seed+(bucket[0]+i+1)*BASE_LENGTH)]
+					decoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
+
+			decoder_inputs = decoder_inputs[:-1]
+			# add GO symble
+			decoder_inputs = [[[0.0 for x in range(model.input_size)] for x in range(model.batch_size)]] + decoder_inputs
+
+			# print( np.array(encoder_inputs).shape )
+			# print( np.array(decoder_inputs).shape )
 
 			#train
-			stepout = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, False)
+			stepout = model.step(sess, encoder_inputs, decoder_inputs, False)
 			# _gn, step_loss, _ = model.step(sess, encoder_inputs_list, decoder_inputs_list, target_weights_list, bucket_id, False)
 
 			# print("Gradient norm",stepout[0])
@@ -289,32 +344,59 @@ def train():
 			# print ("-----STEP TIME",time.time()-start_time)
 			step_time += (time.time() - start_time) / FLAGS.steps_per_checkpoint
 			step_time_mini += (time.time() - start_time) / 10.0
-			loss += stepout[1] / FLAGS.steps_per_checkpoint
+			loss += np.average(stepout[1]) / FLAGS.steps_per_checkpoint
+
+
+
+
+			# Accuracy calculate
+			p_out = np.array(stepout[2])
+			t_out = np.array(decoder_inputs)
+
+			p_out = p_out[:-1]
+			t_out = t_out[1:]
+
+			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
+			label_target = np.array(t_out)
+
+			results = np.equal(label_predict,label_target)
+			results = np.sum(results, axis=2)
+			results = (results == model.output_size).astype(int)
+
+			true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+
+			accuracy += true_accuracy / FLAGS.steps_per_checkpoint
 			current_step += 1
 
 			# Once in a while, we save checkpoint, print statistics, and run evals.
 			
 			# with tf.device("/job:localhost/task:0"):
 			# /job:localhost/replica:0/task:0
-			if current_step % 10 == 0:
-				# print ("#########STEP TIME",step_time_mini)
-				step_time_mini = 0.0
+			# if current_step % 10 == 0:
+			# 	# print ("#########STEP TIME",step_time_mini)
+			# 	step_time_mini = 0.0
 			if current_step % FLAGS.steps_per_checkpoint == 0:
 				# Print statistics for the previous epoch.
 				# perplexity = math.exp(loss) if loss < 300 else float('inf')
 				perplexity = loss
 				print (datetime.datetime.today())
-				print ("global step %d learning rate %.4f step-time %.2f perplexity "
-							 "%.10f" % (model.global_step.eval(session=sess), model.learning_rate.eval(session=sess),
-												 step_time, perplexity))
+				print (
+					"==========",
+					"global step", model.global_step.eval(session=sess),
+					" learning rate", model.learning_rate.eval(session=sess),
+					" step-time", step_time
+					)
+				print("LOSS",loss)
+				print("ACCU",accuracy)
 				# Decrease learning rate if no improvement was seen over last 3 times.
 				if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
 					sess.run(model.learning_rate_decay_op)
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
 				checkpoint_path = os.path.join(FLAGS.train_dir, "mindflow.ckpt")
-				model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+				# model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
+				accuracy = 0.0
 				# Run evals on development set and print their perplexity.
 				# for bucket_id in xrange(len(_buckets)):
 				# 	if len(dev_set[bucket_id]) == 0:
@@ -498,9 +580,9 @@ def self_test():
 		# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
 		model = create_model(sess, True)
 
-		model.batch_size = 100
+		# model.batch_size = 100
 
-		test_set = read_data(SOURCE_PATH+CSV_NAME)
+		test_set = read_data(SOURCE_PATH+TEST_CSV_NAME)
 
 		test_bucket_sizes = [len(test_set[b]) for b in xrange(len(_buckets))]
 		test_total_size = float(sum(test_bucket_sizes))
@@ -511,42 +593,55 @@ def self_test():
 		loss = 0.0
 		epo = 10.0
 		error = 0.0
+		sub_error = np.zeros([_buckets[0][1]-1])
 		while i <= epo:
-			encoder_inputs, decoder_inputs, target_weights = model.get_batch_seq(test_set, bucket_id, BASE_LENGTH)
+			# encoder_inputs, decoder_inputs, target_weights = model.get_batch_seq(test_set, bucket_id, BASE_LENGTH)
+			encoder_inputs, decoder_inputs, target_weights = model.get_batch(test_set, bucket_id)
 			#test
 			stepout = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, True)
 			# _gn, step_loss, _ = model.step(sess, encoder_inputs_list, decoder_inputs_list, target_weights_list, bucket_id, False)
 
-			print("Gradient norm",stepout[0])
-			print("step_loss",stepout[1])
+			# print("Gradient norm",stepout[0])
+			# print("step_loss",stepout[1])
 			# print ("-----STEP TIME",time.time()-start_time)
 
 			# print (len(stepout[2]))
 			# print (len(stepout[2][0]))
 			# print (len(stepout[2][0][0]))
 
-			# print (stepout[2][0][0])
-			# print (decoder_inputs[0][0])
 
-			predict_result = np.array(stepout[2])
-			target_result = np.array(decoder_inputs)
+
+			predict_result = np.array(stepout[2])[1:]
+			target_result = np.array(decoder_inputs)[1:]
+
 
 			# print (predict_result.shape)
 			# print (target_result.shape)
 
 			error_result = target_result-predict_result
+			error_result = np.absolute(error_result)
+			sub_error_result = np.average(error_result, axis=1)
+			sub_error_result = np.average(sub_error_result, axis=1)
 
+
+			sub_error += sub_error_result/epo
+
+			# print(error_result.shape)
 			error_result = np.average(error_result, axis=0)
+			# print(error_result.shape)
 			error_result = np.average(error_result, axis=1)
+			# print(error_result.shape)
 			_error = np.average(error_result,)
 
-			print (error_result)
-			print (_error)
+			# print (error_result)
+			# print (_error)
 			# print (error_result.shape)
 
 			error += _error/epo
 
-			break
+
+
+			# break
 
 			i+=1
 			continue
@@ -590,12 +685,120 @@ def self_test():
 			# 	error += 100.0/epo
 			# 	continue
 			# error += _error
+
+
+		# print (stepout[2][0][0][:5])
+		# print (decoder_inputs[0][0][:5])
+		print (stepout[2][1][0][:5])
+		print (decoder_inputs[1][0][:5])
+		print (stepout[2][2][0][:5])
+		print (decoder_inputs[2][0][:5])
+		print (stepout[2][3][0][:5])
+		print (decoder_inputs[3][0][:5])
+		print (stepout[2][4][0][:5])
+		print (decoder_inputs[4][0][:5])
+
+		# print (stepout[2][0][1][:5])
+		# print (decoder_inputs[0][1][:5])
+		# print (stepout[2][1][1][:5])
+		# print (decoder_inputs[1][1][:5])
+		# print (stepout[2][2][1][:5])
+		# print (decoder_inputs[2][1][:5])
+		# print (stepout[2][3][1][:5])
+		# print (decoder_inputs[3][1][:5])
+		# print (stepout[2][4][1][:5])
+		# print (decoder_inputs[4][1][:5])
+
+		# print (stepout[2][0][2][:5])
+		# print (decoder_inputs[0][2][:5])
+		# print (stepout[2][1][2][:5])
+		# print (decoder_inputs[1][2][:5])
+		# print (stepout[2][2][2][:5])
+		# print (decoder_inputs[2][2][:5])
+		# print (stepout[2][3][2][:5])
+		# print (decoder_inputs[3][2][:5])
+		# print (stepout[2][4][2][:5])
+		# print (decoder_inputs[4][2][:5])
+
+
 		print ("=====FINAL   ERROR=====",error)
 		# print ("=====FINAL UP DOWN=====",error)
+		print ("=====MINUTES ERROR=====")
+		print (sub_error)
+
+
+def model_test():
+	"""Test the s2s model."""
+	with tf.Session() as sess:
+		print("Model-test for s2s model.")
+	# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
+	model = seq2seq_model.Seq2SeqModel(input_size=5, output_size=5, buckets=[(3, 3)], size=200, num_layers=2, max_gradient_norm=5.0, batch_size=2, learning_rate=0.5, learning_rate_decay_factor=0.9, num_samples=8)
+
+	sess.run(tf.initialize_all_variables())
+
+	# Fake data set for both the (3, 3) bucket.
+	data_set = [[]]
+	for _ in range(50):
+		batch_input = []
+		batch_output = []
+		for __ in range(model.buckets[0][0]):
+			item = [0.0 for _ in range(model.input_size)]
+			for _ in range(1):
+				item[random.randint(0, model.input_size-1)] = 1.0
+			batch_input.append(item)
+		for __ in range(model.buckets[0][1]):
+			item = [0.0 for _ in range(model.input_size)]
+			for _ in range(1):
+				item[random.randint(0, model.input_size-1)] = 1.0
+			batch_output.append(item)
+		one_batch = [batch_input, batch_output]
+		data_set[0].append(one_batch)
+	# data_set = [[
+	# 		[
+	# 			[[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]],
+	# 			[[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]]
+	# 		],
+	# 		[
+	# 			[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]],
+	# 			[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]]
+	# 		]
+	# 	]]
+	for _ in xrange(5001):  # Train the fake model for 5 steps.
+		bucket_id = 0
+
+		encoder_inputs, decoder_inputs, target_weights = model.get_batch(data_set, bucket_id)
+
+		# print( np.array(encoder_inputs).shape )
+		# print( np.array(decoder_inputs).shape )
+		# print( np.array(target_weights).shape )
+
+		stepout = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, False)
+
+		if _ % 500 == 0:
+			print("@@@@@@@@@@@@@@",_)
+			p_out = np.array(stepout[2])
+			t_out = np.array(decoder_inputs)
+			# print(p_out[0][0][:5])
+			# print(t_out[0][0][:5])
+			error = np.average(np.absolute(t_out-p_out))
+			print("LOSS",stepout[1])
 
 
 
+			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
+			label_target = np.array(t_out)
+			print(np.array(label_predict).shape)
+			print(np.array(label_target).shape)
 
+
+			results = np.equal(label_predict,label_target)
+			# print results
+			results = np.sum(results, axis=2)
+			print(results)
+			results = (results == model.output_size).astype(int)
+			# print results
+			# print np.array(results).shape
+			print("True Number",np.sum(results),"/", model.buckets[bucket_id][1]*model.batch_size)
 
 
 
@@ -610,7 +813,17 @@ def main(_):
 
 
 if __name__ == "__main__":
+
+	# model_test()
+
+	if ACTION == "train":
+		train()
+	elif ACTION == "test":
+		self_test()
+
+
+
 	# tf.app.run()
 	# read_data(SOURCE_PATH+CSV_NAME)
-	train()
+	# train()
 	# self_test()
