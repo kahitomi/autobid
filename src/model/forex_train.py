@@ -96,7 +96,7 @@ tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training 
 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 18000, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 1800, "How many training steps to do per checkpoint.")
 tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
@@ -409,7 +409,7 @@ def train():
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
 				checkpoint_path = os.path.join(FLAGS.train_dir, "forex.ckpt")
-				# model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+				model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
 				accuracy = 0.0
 				# Run evals on development set and print their perplexity.
