@@ -49,6 +49,7 @@ class nn(object):
 
 		# 节点初始化
 		cell = tf.nn.rnn_cell.GRUCell(self.hidden_size)
+		# cell = tf.nn.rnn_cell.GRUCell(self.hidden_size, activation=tf.nn.relu)
 		if self.hidden_number > 1:
 			cell = tf.nn.rnn_cell.MultiRNNCell([cell] * self.hidden_number)
 		cell = tf.nn.rnn_cell.InputProjectionWrapper(cell, self.hidden_size, self.input_size)
@@ -65,12 +66,15 @@ class nn(object):
 		cell_outputs, state = tf.nn.rnn(cell, [self.inputs], dtype=tf.float32)
 
 		# output = tf.reshape(tf.concat(1, cell_outputs), [-1, self.hidden_size])
-		softmax_w = tf.get_variable("softmax_w", [self.hidden_size, self.output_size])
-		softmax_b = tf.get_variable("softmax_b", [self.output_size])
-		# self.outputs = logits = tf.matmul(output, softmax_w) + softmax_b
-		# self.outputs = logits = tf.matmul(cell_outputs[0], softmax_w) + softmax_b
-		self.outputs = logits = tf.matmul(cell_outputs[0], softmax_w) + softmax_b
+		# output_w = tf.get_variable("output_w", [self.input_size, self.output_size])
+		output_w = tf.get_variable("output_w", [self.hidden_size, self.output_size])
+		output_b = tf.get_variable("output_b", [self.output_size])
+		# self.outputs = logits = tf.matmul(self.inputs, output_w) + output_b
+		# self.outputs = logits = tf.matmul(cell_outputs[0], output_w) + output_b
+		# self.outputs = logits = tf.matmul(cell_outputs[0], output_w) + output_b
 		# self.outputs = logits = cell_outputs[0]
+
+		self.outputs = logits = tf.nn.sigmoid(tf.matmul(cell_outputs[0], output_w) + output_b)
 
 
 		# loss 计算
@@ -87,10 +91,18 @@ class nn(object):
 
 
 			# tf.greater_equal()
-			return tf.nn.sigmoid_cross_entropy_with_logits(logit, target)
+			# return tf.nn.sigmoid_cross_entropy_with_logits(logit, target)
 
 			# return tf.reduce_sum(tf.pow(logit-target, 2))/(2*self.batch_size)
-			# return tf.squared_difference(target, logit)
+			# return tf.pow(logit-target, 2)
+			return tf.squared_difference(target, logit)
+
+
+
+			# return logit - logit * target + tf.log(1.0 + tf.exp(-tf.abs(logit)))
+
+
+			# return -tf.add( tf.mul(target, tf.log(logit)), tf.sub(1.0, target) ) * tf.log(1.0 - logit)
 
 
 		# # 现成函数losses
@@ -173,23 +185,25 @@ def nn_test():
 	print "ANN模型测试"
 
 	with tf.Session() as sess:
-		model = nn( batch_size=10, hidden_size=1000, hidden_number=2, input_size=100, output_size=20, is_training=True)
+		model = nn( batch_size=2, hidden_size=200, hidden_number=2, input_size=10, output_size=10, is_training=True, learning_rate=0.1)
 		sess.run(tf.initialize_all_variables())
 
 		# 生成随机数据
 		data_set = []
-		for x in range(500): # 数据数量
+		for x in range(50): # 数据数量
 			# 随机数
 			# item = [random.random() for _ in range(model.input_size)]
 
 			# 随机标签
-			item_in = [0.0 for _ in range(model.input_size)]
-			for _ in range(3):
-				item_in[random.randint(0, model.input_size-1)] = 1.0
+			item_in = [random.random() for _ in range(model.input_size)]
+			# item_in = [0.1 for _ in range(model.input_size)]
+			# for _ in range(3):
+			# 	item_in[random.randint(0, model.input_size-1)] = 0.9
 
-			item_out = [0.0 for _ in range(model.output_size)]
-			for _ in range(3):
-				item_out[random.randint(0, model.output_size-1)] = 1.0
+			item_out = [random.random() for _ in range(model.output_size)]
+			# item_out = [0.1 for _ in range(model.output_size)]
+			# for _ in range(3):
+			# 	item_out[random.randint(0, model.output_size-1)] = 0.9
 
 			data_set.append([item_in, item_out])
 
@@ -216,8 +230,13 @@ def nn_test():
 
 				# print np.array(step_out).shape
 
+				error = np.average(np.absolute(np.array(step_out) - np.array(outputs)))
+
+				print "ERROR:",error
+
 				label_predict = (step_out >= 0.5).astype(int)
-				label_target = outputs
+				label_target = (np.array(outputs) >= 0.5).astype(int)
+
 				# print np.array(label_predict).shape
 				# print np.array(label_target).shape
 				# print label_predict[0]

@@ -21,7 +21,7 @@ from tensorflow.python.ops import nn_ops
 from tensorflow.python.ops import rnn
 from tensorflow.python.ops import rnn_cell
 from tensorflow.python.ops import variable_scope
-
+# from tensorflow.python.util import nest
 
 
 class Seq2SeqModel(object):
@@ -73,7 +73,8 @@ class Seq2SeqModel(object):
 		
 
 		# Create the internal multi-layer cell for our RNN.
-		single_cell = tf.nn.rnn_cell.GRUCell(size)
+		# single_cell = tf.nn.rnn_cell.GRUCell(size)
+		single_cell = tf.nn.rnn_cell.GRUCell(size, activation=tf.nn.relu)
 		if use_lstm:
 			single_cell = tf.nn.rnn_cell.BasicLSTMCell(size)
 		cell = single_cell
@@ -105,33 +106,138 @@ class Seq2SeqModel(object):
 				else:
 					loop_function = None
 
-				# ATTENTION DECODER
-				# First calculate a concatenation of encoder outputs to put attention on.
-				top_states = [array_ops.reshape(e, [-1, 1, wrapper_cell.output_size]) for e in encoder_outputs]
-				attention_states = array_ops.concat(1, top_states)
+				# #################
+				# # ATTENTION DECODER
+				# #################
+				# # First calculate a concatenation of encoder outputs to put attention on.
+				# top_states = [array_ops.reshape(e, [-1, 1, wrapper_cell.output_size]) for e in encoder_outputs]
+				# attention_states = array_ops.concat(1, top_states)
 
 
-				return tf.nn.seq2seq.attention_decoder(decoder_inputs, enc_state, attention_states, wrapper_cell, output_size=self.output_size,loop_function=loop_function)
+				# # return tf.nn.seq2seq.attention_decoder(decoder_inputs, enc_state, attention_states, wrapper_cell, output_size=self.output_size,loop_function=loop_function)
 
+				# initial_state = enc_state
+				# output_size = self.output_size
+				# num_heads = 1
+				# dtype = dtypes.float32
+				# scope = None
+				# initial_state_attention = False
 
-				# # BASIC DECODER
-				# with variable_scope.variable_scope("my_rnn_decoder"):
-				# 	state = enc_state
+				# if not decoder_inputs:
+				# 	raise ValueError("Must provide at least 1 input to attention decoder.")
+				# if num_heads < 1:
+				# 	raise ValueError("With less than 1 heads, use a non-attention decoder.")
+				# if not attention_states.get_shape()[1:2].is_fully_defined():
+				# 	raise ValueError("Shape[1] and [2] of attention_states must be known: %s"
+				# 			% attention_states.get_shape())
+				# if output_size is None:
+				# 	output_size = wrapper_cell.output_size
+
+				# with variable_scope.variable_scope(scope or "attention_decoder") as scope:
+				# 	# dtype = scope.dtype
+
+				# 	batch_size = array_ops.shape(decoder_inputs[0])[0]  # Needed for reshaping.
+				# 	attn_length = attention_states.get_shape()[1].value
+				# 	attn_size = attention_states.get_shape()[2].value
+
+				# 	# To calculate W1 * h_t we use a 1-by-1 convolution, need to reshape before.
+				# 	hidden = array_ops.reshape(attention_states, [-1, attn_length, 1, attn_size])
+				# 	hidden_features = []
+				# 	v = []
+				# 	attention_vec_size = attn_size  # Size of query vectors for attention.
+				# 	for a in xrange(num_heads):
+				# 		k = variable_scope.get_variable("AttnW_%d" % a, [1, 1, attn_size, attention_vec_size])
+				# 		hidden_features.append(nn_ops.conv2d(hidden, k, [1, 1, 1, 1], "SAME"))
+				# 		v.append(variable_scope.get_variable("AttnV_%d" % a, [attention_vec_size]))
+
+				# 	state = initial_state
+
+				# 	def attention(query):
+				# 		"""Put attention masks on hidden using hidden_features and query."""
+				# 		ds = []  # Results of attention reads will be stored here.
+				# 		# if nest.is_sequence(query):  # If the query is a tuple, flatten it.
+				# 		# 	query_list = nest.flatten(query)
+				# 		# 	for q in query_list:  # Check that ndims == 2 if specified.
+				# 		# 		ndims = q.get_shape().ndims
+				# 		# 		if ndims:
+				# 		# 			assert ndims == 2
+				# 		# 	query = array_ops.concat(1, query_list)
+				# 		for a in xrange(num_heads):
+				# 			with variable_scope.variable_scope("Attention_%d" % a):
+				# 				y = rnn_cell._linear(query, attention_vec_size, True)
+				# 				y = array_ops.reshape(y, [-1, 1, 1, attention_vec_size])
+				# 				# Attention mask is a softmax of v^T * tanh(...).
+				# 				s = math_ops.reduce_sum(v[a] * math_ops.tanh(hidden_features[a] + y), [2, 3])
+				# 				a = nn_ops.softmax(s)
+				# 				# Now calculate the attention-weighted vector d.
+				# 				d = math_ops.reduce_sum(array_ops.reshape(a, [-1, attn_length, 1, 1]) * hidden, [1, 2])
+				# 				ds.append(array_ops.reshape(d, [-1, attn_size]))
+				# 		return ds
+
 				# 	outputs = []
 				# 	prev = None
+				# 	batch_attn_size = array_ops.pack([batch_size, attn_size])
+				# 	attns = [array_ops.zeros(batch_attn_size, dtype=dtype)
+				# 				for _ in xrange(num_heads)]
+				# 	for a in attns:  # Ensure the second shape of attention vectors is set.
+				# 		a.set_shape([None, attn_size])
+				# 	if initial_state_attention:
+				# 		attns = attention(initial_state)
 				# 	for i, inp in enumerate(decoder_inputs):
+				# 		if i > 0:
+				# 			variable_scope.get_variable_scope().reuse_variables()
+				# 		# If loop_function is set, we use it instead of decoder_inputs.
 				# 		if loop_function is not None and prev is not None:
 				# 			with variable_scope.variable_scope("loop_function", reuse=True):
 				# 				inp = loop_function(prev, i)
-				# 		if i > 0:
-				# 			variable_scope.get_variable_scope().reuse_variables()
-				# 		output, state = wrapper_cell(inp, state)
-				# 		output = tf.matmul(output, softmax_w) + softmax_b
-				# 		outputs.append(output)
+				# 		# Merge input and previous attentions into one vector of the right size.
+				# 		input_size = inp.get_shape().with_rank(2)[1]
+				# 		if input_size.value is None:
+				# 			raise ValueError("Could not infer input size from input: %s" % inp.name)
+				# 		x = rnn_cell._linear([inp] + attns, input_size, True)
+				# 		# Run the RNN.
+				# 		cell_output, state = wrapper_cell(x, state)
+				# 		# Run the attention mechanism.
+				# 		if i == 0 and initial_state_attention:
+				# 			with variable_scope.variable_scope(variable_scope.get_variable_scope(),
+				# 	                                       reuse=True):
+				# 				attns = attention(state)
+				# 		else:
+				# 			attns = attention(state)
+
+				# 		with variable_scope.variable_scope("AttnOutputProjection"):
+				# 			output = rnn_cell._linear([cell_output] + attns, output_size, True)
+				# 			output = tf.nn.sigmoid(output)
 				# 		if loop_function is not None:
 				# 			prev = output
-				
+				# 		outputs.append(output)
+
 				# 	return outputs, state
+
+
+
+
+				#################
+				# BASIC DECODER
+				#################
+				with variable_scope.variable_scope("my_rnn_decoder"):
+					state = enc_state
+					outputs = []
+					prev = None
+					for i, inp in enumerate(decoder_inputs):
+						if loop_function is not None and prev is not None:
+							with variable_scope.variable_scope("loop_function", reuse=True):
+								inp = loop_function(prev, i)
+						if i > 0:
+							variable_scope.get_variable_scope().reuse_variables()
+						output, state = wrapper_cell(inp, state)
+						output = tf.matmul(output, softmax_w) + softmax_b
+						output = tf.nn.sigmoid(output)
+						outputs.append(output)
+						if loop_function is not None:
+							prev = output
+				
+					return outputs, state
 
 
 
@@ -155,9 +261,11 @@ class Seq2SeqModel(object):
 			# target = array_ops.reshape(target, [-1])
 
 			# return tf.nn.softmax_cross_entropy_with_logits(logit, target)
-			return tf.nn.sigmoid_cross_entropy_with_logits(logit, target)
+			# return tf.nn.sigmoid_cross_entropy_with_logits(logit, target)
 
 			# return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logit, target))
+
+			return tf.squared_difference(target, logit)
 
 
 
@@ -196,8 +304,8 @@ class Seq2SeqModel(object):
 			self.gradient_norm = norm
 			self.update = opt.apply_gradients(zip(clipped_gradients, params), global_step=self.global_step)
 
-			# _optimizer = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate).minimize(self.losses[b])
-			# self.updates.append(_optimizer)
+			# _optimizer = tf.train.FtrlOptimizer(learning_rate=self.learning_rate).minimize(self.loss)
+			# self.update = _optimizer
 
 
 		self.saver = tf.train.Saver(tf.all_variables())
@@ -473,10 +581,10 @@ def model_test():
 	"""Test the s2s model."""
 	with tf.Session() as sess:
 		print("Model-test for s2s model.")
-		bucket=(5, 3)
+		bucket=(3, 3)
 
 		# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
-		model = Seq2SeqModel(input_size=50, output_size=50, bucket=bucket, size=200, num_layers=2, max_gradient_norm=5.0, batch_size=1, learning_rate=0.5, learning_rate_decay_factor=0.9)
+		model = Seq2SeqModel(input_size=5, output_size=5, bucket=bucket, size=200, num_layers=2, max_gradient_norm=5.0, batch_size=5, learning_rate=0.5, learning_rate_decay_factor=0.9)
 
 		sess.run(tf.initialize_all_variables())
 
@@ -484,12 +592,14 @@ def model_test():
 		data_set = []
 		data_set_size = 50
 		for _ in range(data_set_size):
-			item = [0.0 for _ in range(model.input_size)]
-			for _ in range(5):
-				item[random.randint(0, model.input_size-1)] = 1.0
+			item = [random.random() for _ in range(model.input_size)]
+			# item = [0.0 for _ in range(model.input_size)]
+			# for _ in range(5):
+			# 	item[random.randint(0, model.input_size-1)] = 1.0
 			data_set.append(item)
 
 		true_list = []
+		error_list = []
 		for _ in xrange(2001):  # Train the fake model.
 
 			# data random choose
@@ -530,8 +640,11 @@ def model_test():
 			# label_predict = ( np.argmax(p_out, axis=2) >= 0.5 ).astype(int)
 			# label_target = ( np.argmax(t_out, axis=2) >= 0.5 ).astype(int)
 
+			sub_error = np.average(np.absolute(np.array(p_out) - np.array(t_out)))
+			error_list.append(sub_error)
+
 			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = np.array(t_out)
+			label_target = ( np.array(t_out) >= 0.5 ).astype(int)
 
 			# print(np.array(label_predict).shape)
 			# print(np.array(label_target).shape)
@@ -557,8 +670,10 @@ def model_test():
 			if _ % 100 == 0:
 				print("@@@@@@@@@@@@@@",_)
 				print("LOSS",np.average(stepout[1]))
-				print("True percent", np.sum(true_list)/100.0)
+				print("True percent ", np.sum(true_list)/100.0)
+				print("Error average", np.sum(error_list)/100.0)
 				true_list = []
+				error_list = []
 
 			# break
 

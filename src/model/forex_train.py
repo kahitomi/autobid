@@ -57,10 +57,10 @@ SOURCE_PATH = "src/data/forex/"
 
 
 SECOND_VOLUME = 2*2 # values/second
-BASE_LENGTH = 10 # seconds
+BASE_LENGTH = 30 # seconds
 
-NUMBER_SPLIT = 24
-BASIC_SPLIT = 0.00002
+NUMBER_SPLIT = 50
+BASIC_SPLIT = 0.00001
 
 
 sess_config = tf.ConfigProto()
@@ -71,33 +71,35 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (60, 24)
+_buckets = (12, 6)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
 
-tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
-tf.app.flags.DEFINE_integer("batch_size", 50, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 # tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
 
 tf.app.flags.DEFINE_integer("size", 200, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
-tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
+# tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
+# tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 6, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 6, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 1800, "How many training steps to do per checkpoint.")
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 1800, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 20, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -281,16 +283,60 @@ def output_to_number(output):
 	return number_list
 
 
+def number_to_number(n, base_n):
+	period = NUMBER_SPLIT*BASIC_SPLIT/2.0
+	differ = float(n) - float(base_n)
+	differ += period
+	if differ < 0.0:
+		differ = 0.0
+	if differ > period*2.0:
+		differ = period*2.0
+	differ = differ/(period*2.0)
+	return differ
+
 def block_to_input(block, start_bid_price, start_ask_price):
-	input_list = []
+
+	# # tick data
+	# input_list = []
+	# for b in block:
+	# 	for n in b:
+	# 		if n < SECOND_VOLUME/2:
+	# 			input_list += number_to_bools(n,start_bid_price)
+	# 		else:
+	# 			input_list += number_to_bools(n,start_ask_price)
+
+	# return input_list
+
+
+	# low high open close data
+	# open_bid = float( block[0][0] )
+	# open_ask = float( block[0][int(SECOND_VOLUME/2)] )
+	close_bid = number_to_number(float( block[-1][int(SECOND_VOLUME/2)-1] ), start_bid_price)
+	close_ask = number_to_number(float( block[-1][-1] ), start_ask_price)
+	low_bid = 1.0
+	low_ask = 1.0
+	high_bid = 0.0
+	high_ask = 0.0
 	for b in block:
 		for n in b:
 			if n < SECOND_VOLUME/2:
-				input_list += number_to_bools(n,start_bid_price)
+				# bid
+				differ = number_to_number(n, start_bid_price)
+				if differ < low_bid:
+					low_bid = differ
+				if differ > high_bid:
+					high_bid = differ
 			else:
-				input_list += number_to_bools(n,start_ask_price)
+				# ask
+				differ = number_to_number(n, start_ask_price)
+				if differ < low_ask:
+					low_ask = differ
+				if differ > high_ask:
+					high_ask = differ
 
-	return input_list
+	# print(close_bid, low_bid, high_bid, close_ask, low_ask, high_ask)
+
+	return (close_bid, low_bid, high_bid, close_ask, low_ask, high_ask)
 
 
 
@@ -318,6 +364,7 @@ def train():
 		# This is the training loop.
 		step_time, loss = 0.0, 0.0
 		accuracy = 0.0
+		error = 0.0
 		step_time_mini = 0.0
 		current_step = 0
 		previous_losses = []
@@ -381,6 +428,9 @@ def train():
 			true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
 
 			accuracy += true_accuracy / FLAGS.steps_per_checkpoint
+
+			_error = np.average(np.absolute(np.array(p_out) - np.array(t_out)))
+			error += _error / FLAGS.steps_per_checkpoint
 			current_step += 1
 
 			# Once in a while, we save checkpoint, print statistics, and run evals.
@@ -390,7 +440,15 @@ def train():
 			# if current_step % 10 == 0:
 			# 	# print ("#########STEP TIME",step_time_mini)
 			# 	step_time_mini = 0.0
-			if current_step % FLAGS.steps_per_checkpoint == 0:
+			if current_step % FLAGS.steps_per_checkpoint == 0:	
+
+				# print(p_out)
+				# print(t_out)
+
+				# print(np.array(p_out).shape)
+				# print(np.array(t_out).shape)
+
+
 				# Print statistics for the previous epoch.
 				# perplexity = math.exp(loss) if loss < 300 else float('inf')
 				perplexity = loss
@@ -403,6 +461,7 @@ def train():
 					)
 				print("LOSS",loss)
 				print("ACCU",accuracy)
+				print("ERRO",error)
 				# Decrease learning rate if no improvement was seen over last 3 times.
 				if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
 					sess.run(model.learning_rate_decay_op)
@@ -412,6 +471,7 @@ def train():
 				model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
 				accuracy = 0.0
+				error = 0.0
 				# Run evals on development set and print their perplexity.
 				# for bucket_id in xrange(len(_buckets)):
 				# 	if len(dev_set[bucket_id]) == 0:
@@ -422,6 +482,8 @@ def train():
 				# 	eval_ppx = math.exp(eval_loss) if eval_loss < 300 else float('inf')
 				# 	print("  eval: bucket %d perplexity %.2f" % (bucket_id, eval_ppx))
 				sys.stdout.flush()
+
+			# break
 
 
 
@@ -651,17 +713,18 @@ def self_test():
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
 
-			# Error calculate
-			p_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
-			t_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
-			for step in range(bucket[1]-1):
-				for batch_number in range(model.batch_size):
-					p_price[step][batch_number] = output_to_number(p_out[step][batch_number])
-					t_price[step][batch_number] = output_to_number(t_out[step][batch_number])
-			# print(np.array(p_price).shape)
-			# print(np.array(t_price).shape)
+			# # Error calculate
+			# p_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
+			# t_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
+			# for step in range(bucket[1]-1):
+			# 	for batch_number in range(model.batch_size):
+			# 		p_price[step][batch_number] = output_to_number(p_out[step][batch_number])
+			# 		t_price[step][batch_number] = output_to_number(t_out[step][batch_number])
+			# # print(np.array(p_price).shape)
+			# # print(np.array(t_price).shape)
 
-			error_price = np.absolute(np.array(p_price)-np.array(t_price))
+			# error_price = np.absolute(np.array(p_price)-np.array(t_price))
+			error_price = np.absolute(np.array(p_out)-np.array(t_out))
 			error_price = np.average(error_price, axis=1)
 			error_price = np.average(error_price, axis=1)
 
@@ -723,14 +786,14 @@ def self_test():
 				accu = np.average(x, axis=0)
 				final_accu.append(accu)
 
-		# print ("=====FINAL UP DOWN=====",error)
-		print ("=====SUB   ACCU=====")
-		for x in range(len(final_accu)):
-			print ("#",x,"#",final_accu[x])
+		# # print ("=====FINAL UP DOWN=====",error)
+		# print ("=====SUB   ACCU=====")
+		# for x in range(len(final_accu)):
+		# 	print ("#",x,"#",final_accu[x])
 
-		print ("=====FINAL ACCU=====")
-		ACCU = [ np.average(np.array(x)) for x in final_accu]
-		print (np.average(np.array(ACCU)))
+		# print ("=====FINAL ACCU=====")
+		# ACCU = [ np.average(np.array(x)) for x in final_accu]
+		# print (np.average(np.array(ACCU)))
 
 		print ("=====SUB   ERRO=====")
 		for x in range(len(final_error)):
