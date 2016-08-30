@@ -670,7 +670,7 @@ def self_test():
 		final_accu_collect = [ [] for x in range(wheel_part_number) ]
 		final_error_collect = [ [] for x in range(wheel_part_number) ]
 
-		epo = 10.0*wheel_part_number
+		epo = 20.0*wheel_part_number
 		epo_counter = 0
 		while epo_counter <= epo:
 			seed_wheel = random.randint(0, wheel_part_number-1)
