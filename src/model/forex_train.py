@@ -775,10 +775,15 @@ def self_test():
 			
 			# Accuracy calculate
 
-			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = np.array(t_out)
+			# label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
+			# label_target = np.array(t_out)
 
-			results = np.equal(label_predict,label_target)
+			# results = np.equal(label_predict,label_target)
+
+
+			results = (np.absolute(p_out_real-t_out_real) < 0.02).astype(int)
+
+
 			results = np.sum(results, axis=2)
 			results = (results == model.output_size).astype(int)
 
@@ -825,14 +830,14 @@ def self_test():
 				accu = np.average(x, axis=0)
 				final_accu.append(accu)
 
-		# # print ("=====FINAL UP DOWN=====",error)
-		# print ("=====SUB   ACCU=====")
-		# for x in range(len(final_accu)):
-		# 	print ("#",x,"#",final_accu[x])
+		# print ("=====FINAL UP DOWN=====",error)
+		print ("=====SUB   ACCU=====")
+		for x in range(len(final_accu)):
+			print ("#",x,"#",final_accu[x])
 
-		# print ("=====FINAL ACCU=====")
-		# ACCU = [ np.average(np.array(x)) for x in final_accu]
-		# print (np.average(np.array(ACCU)))
+		print ("=====FINAL ACCU=====")
+		ACCU = [ np.average(np.array(x)) for x in final_accu]
+		print (np.average(np.array(ACCU)))
 
 		print ("=====SUB   ERRO=====")
 		for x in range(len(final_error)):
