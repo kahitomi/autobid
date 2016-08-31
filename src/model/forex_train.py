@@ -781,7 +781,7 @@ def self_test():
 			# results = np.equal(label_predict,label_target)
 
 
-			results = (np.absolute(p_out_real-t_out_real) < 0.02).astype(int)
+			results = (np.absolute(p_out_real-t_out_real) < 0.05).astype(int)
 
 
 			results = np.sum(results, axis=2)
