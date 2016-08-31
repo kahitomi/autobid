@@ -731,7 +731,13 @@ def self_test():
 			# # print(np.array(t_price).shape)
 
 			# error_price = np.absolute(np.array(p_price)-np.array(t_price))
-			error_price = np.absolute(np.array(p_out)-np.array(t_out))
+
+			p_out_real = numpy.arctanh( 2.0*np.array(p_out)-1.0 ) / 4.5
+			t_out_real = numpy.arctanh( 2.0*np.array(t_out)-1.0 ) / 4.5
+
+			error_price = np.absolute(p_out_real-t_out_real)
+
+			# error_price = np.absolute(np.array(p_out)-np.array(t_out))
 			error_price = np.average(error_price, axis=1)
 			error_price = np.average(error_price, axis=1)
 
@@ -743,7 +749,9 @@ def self_test():
 
 
 
-			error_dis = np.sqrt(np.power(np.array(p_out)-np.array(t_out), 2))
+			error_dis = np.sqrt(np.power(p_out_real-t_out_real, 2))
+
+			# error_dis = np.sqrt(np.power(np.array(p_out)-np.array(t_out), 2))
 			error_dis = np.average(error_dis, axis=1)
 			error_dis = np.average(error_dis, axis=1)
 
@@ -826,11 +834,11 @@ def self_test():
 		ERRO = [ np.average(np.array(x)) for x in final_error]
 		print (np.average(np.array(ERRO)))
 
-		print ("=====SUB   ERRO=====")
+		print ("=====SUB   DIST=====")
 		for x in range(len(final_error_dis)):
 			print ("#",x,"#",final_error_dis[x])
 
-		print ("=====FINAL ERRO=====")
+		print ("=====FINAL DIST=====")
 		ERRO = [ np.average(np.array(x)) for x in final_error_dis]
 		print (np.average(np.array(ERRO)))
 
