@@ -740,8 +740,8 @@ def self_test():
 			t_out_real[t_out_real > 1.0] = 1.0
 			t_out_real[t_out_real < -1.0] = -1.0
 
-			p_out_real = np.arctanh( p_out_real ) / 4.5
-			t_out_real = np.arctanh( t_out_real ) / 4.5
+			p_out_real[p_out_real != 0.0] = np.arctanh( p_out_real[p_out_real != 0.0] ) / 4.5
+			t_out_real[p_out_real != 0.0] = np.arctanh( t_out_real[p_out_real != 0.0] ) / 4.5
 
 			error_price = np.absolute(p_out_real-t_out_real)
 
