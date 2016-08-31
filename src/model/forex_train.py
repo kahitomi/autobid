@@ -735,10 +735,10 @@ def self_test():
 			p_out_real = 2.0*np.array(p_out)-1.0
 			t_out_real = 2.0*np.array(t_out)-1.0
 
-			p_out_real[p_out_real > 0.99] = 0.99
-			p_out_real[p_out_real < -0.99] = -0.99
-			t_out_real[t_out_real > 0.99] = 0.99
-			t_out_real[t_out_real < -0.99] = -0.99
+			p_out_real[p_out_real > 0.999] = 0.999
+			p_out_real[p_out_real < -0.999] = -0.999
+			t_out_real[t_out_real > 0.999] = 0.999
+			t_out_real[t_out_real < -0.999] = -0.999
 
 			p_out_real = np.arctanh( p_out_real ) / 4.5
 			t_out_real = np.arctanh( t_out_real ) / 4.5
