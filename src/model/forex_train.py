@@ -732,8 +732,8 @@ def self_test():
 
 			# error_price = np.absolute(np.array(p_price)-np.array(t_price))
 
-			p_out_real = numpy.arctanh( 2.0*np.array(p_out)-1.0 ) / 4.5
-			t_out_real = numpy.arctanh( 2.0*np.array(t_out)-1.0 ) / 4.5
+			p_out_real = np.arctanh( 2.0*np.array(p_out)-1.0 ) / 4.5
+			t_out_real = np.arctanh( 2.0*np.array(t_out)-1.0 ) / 4.5
 
 			error_price = np.absolute(p_out_real-t_out_real)
 
