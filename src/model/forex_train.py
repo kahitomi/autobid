@@ -781,11 +781,11 @@ def self_test():
 			# results = np.equal(label_predict,label_target)
 
 
-			results = (np.absolute(p_out_real-t_out_real) < 0.05).astype(int)
+			results = (np.absolute(p_out_real-t_out_real) < 0.02).astype(int)
 
 
-			results = np.sum(results, axis=2)
-			results = (results == model.output_size).astype(int)
+			# results = np.sum(results, axis=2)
+			# results = (results == model.output_size).astype(int)
 
 			# print (np.sum(results, axis=1)/float(model.batch_size))
 			# print (results.shape)
@@ -794,6 +794,8 @@ def self_test():
 
 			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
 
+
+			true_accuracy = float(np.sum(results)) / float(results.size)
 			final_accu_collect[seed_wheel].append(true_accuracy)
 			# accuracy += true_accuracy / FLAGS.steps_per_checkpoint
 
