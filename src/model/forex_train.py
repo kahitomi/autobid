@@ -675,6 +675,7 @@ def self_test():
 
 		final_accu_collect = [ [] for x in range(wheel_part_number) ]
 		final_error_collect = [ [] for x in range(wheel_part_number) ]
+		final_error_dis_collect = [ [] for x in range(wheel_part_number) ]
 
 		epo = 100.0*wheel_part_number
 		epo_counter = 0
@@ -741,6 +742,14 @@ def self_test():
 			final_error_collect[seed_wheel].append(error_price)
 
 
+
+			error_dis = np.sqrt(np.power(np.array(p_out), 2)-np.power(np.array(t_out), 2))
+			error_dis = np.average(error_dis, axis=1)
+			error_dis = np.average(error_dis, axis=1)
+
+			final_error_dis_collect[seed_wheel].append(error_dis)
+
+
 			# start_bid_price = test_set[seed][0]
 			# start_ask_price = test_set[seed][int(SECOND_VOLUME/2)]
 
@@ -782,6 +791,14 @@ def self_test():
 				x = np.array(x)
 				err = np.average(x, axis=0)
 				final_error.append(err)
+		final_error_dis = []
+		for x in final_error_dis_collect:
+			if len(x) == 0:
+				final_error_dis.append([0.0 for _ in range(bucket[1]-1)])
+			else:
+				x = np.array(x)
+				err = np.average(x, axis=0)
+				final_error_dis.append(err)
 
 		final_accu = []
 		for x in final_accu_collect:
@@ -807,6 +824,14 @@ def self_test():
 
 		print ("=====FINAL ERRO=====")
 		ERRO = [ np.average(np.array(x)) for x in final_error]
+		print (np.average(np.array(ERRO)))
+
+		print ("=====SUB   ERRO=====")
+		for x in range(len(final_error_dis)):
+			print ("#",x,"#",final_error_dis[x])
+
+		print ("=====FINAL ERRO=====")
+		ERRO = [ np.average(np.array(x)) for x in final_error_dis]
 		print (np.average(np.array(ERRO)))
 
 
