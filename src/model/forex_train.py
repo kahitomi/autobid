@@ -71,21 +71,21 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (12, 6)
+_buckets = (9, 6)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
 
-tf.app.flags.DEFINE_float("learning_rate", 0.5, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
 # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 20, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 300, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
@@ -98,8 +98,8 @@ tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training 
 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 4200, "How many training steps to do per checkpoint.")
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 20, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 4200, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 800, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -152,11 +152,11 @@ def read_data(source_path, max_size=None, test=None):
 		data_set.append(second_prices)
 		counter += 1
 
-		# ###########
-		# # FOR TEST
-		# ###########
-		# if counter > ((bucket[0]+bucket[1])*BASE_LENGTH+200):
-		# 	break
+		###########
+		# FOR TEST
+		###########
+		if counter > ((bucket[0]+bucket[1])*BASE_LENGTH+16000):
+			break
 
 
 
@@ -287,11 +287,17 @@ def number_to_number(n, base_n):
 	period = NUMBER_SPLIT*BASIC_SPLIT/2.0
 	differ = float(n) - float(base_n)
 	differ += period
-	if differ < 0.0:
-		differ = 0.0
-	if differ > period*2.0:
-		differ = period*2.0
+
 	differ = differ/(period*2.0)
+	differ = (math.tanh(4.5*differ)+1.0)/2.0
+
+	# if differ < 0.0:
+	# 	differ = 0.0
+	# if differ > period*2.0:
+	# 	differ = period*2.0
+	# differ = differ/(period*2.0)
+
+
 	return differ
 
 def block_to_input(block, start_bid_price, start_ask_price):
@@ -468,7 +474,7 @@ def train():
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
 				checkpoint_path = os.path.join(FLAGS.train_dir, "forex.ckpt")
-				model.saver.save(sess, checkpoint_path, global_step=model.global_step)
+				# model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
 				accuracy = 0.0
 				error = 0.0

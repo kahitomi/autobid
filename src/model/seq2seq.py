@@ -73,8 +73,8 @@ class Seq2SeqModel(object):
 		
 
 		# Create the internal multi-layer cell for our RNN.
-		# single_cell = tf.nn.rnn_cell.GRUCell(size)
-		single_cell = tf.nn.rnn_cell.GRUCell(size, activation=tf.nn.relu)
+		single_cell = tf.nn.rnn_cell.GRUCell(size)
+		# single_cell = tf.nn.rnn_cell.GRUCell(size, activation=tf.nn.relu)
 		if use_lstm:
 			single_cell = tf.nn.rnn_cell.BasicLSTMCell(size)
 		cell = single_cell
