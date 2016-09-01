@@ -71,13 +71,13 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (12, 6)
+_buckets = (6, 6)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
 
-tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.05, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
