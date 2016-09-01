@@ -584,7 +584,7 @@ def model_test():
 		bucket=(3, 3)
 
 		# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
-		model = Seq2SeqModel(input_size=5, output_size=5, bucket=bucket, size=200, num_layers=2, max_gradient_norm=5.0, batch_size=5, learning_rate=0.5, learning_rate_decay_factor=0.9)
+		model = Seq2SeqModel(input_size=5, output_size=5, bucket=bucket, size=100, num_layers=2, max_gradient_norm=5.0, batch_size=5, learning_rate=0.5, learning_rate_decay_factor=0.9)
 
 		sess.run(tf.initialize_all_variables())
 
