@@ -57,7 +57,7 @@ SOURCE_PATH = "src/data/forex/"
 
 
 SECOND_VOLUME = 2*2 # values/second
-BASE_LENGTH = 30 # seconds
+BASE_LENGTH = 60 # seconds
 
 NUMBER_SPLIT = 50
 BASIC_SPLIT = 0.00001
@@ -74,7 +74,7 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (24, 6)
+_buckets = (20, 5)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
@@ -88,7 +88,7 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm
 # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 200, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
