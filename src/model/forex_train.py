@@ -102,7 +102,7 @@ tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
 # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10000, "How many training steps to do per checkpoint.")
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 800, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
