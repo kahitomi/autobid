@@ -57,13 +57,16 @@ SOURCE_PATH = "src/data/forex/"
 
 
 SECOND_VOLUME = 2*2 # values/second
+DATA_DIS = 5
 BASE_LENGTH = 60 # seconds
 
 NUMBER_SPLIT = 50
 BASIC_SPLIT = 0.00001
 
 IFSAVE = False
-IFTEST = True
+IFTEST = False
+
+VOLUME = [99999999, 0]
 
 
 sess_config = tf.ConfigProto()
@@ -93,8 +96,8 @@ tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 6, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 6, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 9, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 9, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
@@ -102,7 +105,7 @@ tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
 # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10000, "How many training steps to do per checkpoint.")
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 800, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -151,14 +154,26 @@ def read_data(source_path, max_size=None, test=None):
 
 	# 直接转入data
 	data_set = []
-	for second_prices in reader:
-		data_set.append(second_prices)
+	v_list = []
+	for item in reader:
+		data_set.append(item)
+
+		v_list.append(int(item[-1]))
+		if len(v_list) > BASE_LENGTH/DATA_DIS:
+			v_list = v_list[(-int(BASE_LENGTH/DATA_DIS)):]
+
+		v = sum(v_list)
+		if v < VOLUME[0]:
+			VOLUME[0] = v
+		if v > VOLUME[1]:
+			VOLUME[1] = v
+
 		counter += 1
 
 		###########
 		# FOR TEST
 		###########
-		if IFTEST and counter > ((bucket[0]+bucket[1])*BASE_LENGTH+8000):
+		if IFTEST and counter > ((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS+8000):
 			break
 
 
@@ -349,6 +364,86 @@ def block_to_input(block, start_bid_price, start_ask_price):
 
 
 
+def get_batch(data_set):
+	data_set_size = len(data_set)
+	# data random choose
+	encoder_inputs = [ [] for x in range(bucket[0]) ]
+	decoder_inputs = [ [] for x in range(bucket[1]) ]
+
+
+	for x in range(FLAGS.batch_size):
+		seed = random.randint(0, data_set_size-1-((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS))
+
+		start_bid_price = data_set[seed][1]
+		start_ask_price = data_set[seed][5]
+
+		has_complete = False
+		pointer = seed
+		bucket_pointer = 0
+		time_pointer = datetime.datetime.strptime(data_set[seed][0], "%Y-%m-%dT%H:%M:%S.000000Z")
+		[_op_bid, _cl_bid, _hi_bid, _lo_bid, _op_ask, _cl_ask, _hi_ask, _lo_ask] = data_set[seed][1:-1]
+		_volume = 0.0
+		while not has_complete:
+			item = data_set[pointer]
+			current_time = datetime.datetime.strptime(item[0], "%Y-%m-%dT%H:%M:%S.000000Z")
+
+			# 一个输入完成
+			if (current_time - time_pointer).seconds > 60:
+				time_pointer = current_time
+				# 最后处理
+				_op_bid = number_to_number(_op_bid, start_bid_price)
+				_op_ask = number_to_number(_op_ask, start_ask_price)
+				_cl_bid = number_to_number(_cl_bid, start_bid_price)
+				_cl_ask = number_to_number(_cl_ask, start_ask_price)
+				_hi_bid = number_to_number(_hi_bid, start_bid_price)
+				_hi_ask = number_to_number(_hi_ask, start_ask_price)
+				_lo_bid = number_to_number(_lo_bid, start_bid_price)
+				_lo_ask = number_to_number(_lo_ask, start_ask_price)
+				_volume = float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0])
+
+				# 添加
+				_input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask, _volume]
+				if bucket_pointer < bucket[0]:
+					encoder_inputs[bucket_pointer].append(_input_block)
+				else:
+					decoder_inputs[bucket_pointer-bucket[0]].append(_input_block)
+
+				# 完成判断
+				bucket_pointer += 1
+				# print (bucket_pointer, "/", sum(bucket))
+				if bucket_pointer >= sum(bucket):
+					has_complete = True
+
+				#复原 初始化
+				[_op_bid, _cl_bid, _hi_bid, _lo_bid, _op_ask, _cl_ask, _hi_ask, _lo_ask] = item[1:-1]
+				_volume = 0.0
+
+			# 滚动操作
+			_cl_bid = item[2]
+			_cl_ask = item[6]
+			if _hi_bid < item[3]:
+				_hi_bid = item[3]
+			if _hi_ask < item[7]:
+				_hi_ask = item[7]
+			if _lo_bid > item[4]:
+				_lo_bid = item[4]
+			if _lo_ask > item[8]:
+				_lo_ask = item[8]
+			_volume += float(item[-1])
+			pointer += 1
+
+
+
+	decoder_inputs = decoder_inputs[:-1]
+	# add GO symble
+	decoder_inputs = [[[0.0 for x in range(FLAGS.target_vocab_size)] for x in range(FLAGS.batch_size)]] + decoder_inputs
+
+	# print( np.array(encoder_inputs).shape )
+	# print( np.array(decoder_inputs).shape )
+
+	return (encoder_inputs, decoder_inputs)
+
+
 
 
 def train():
@@ -383,28 +478,7 @@ def train():
 			start_time = time.time()
 
 
-			# data random choose
-			encoder_inputs = [ [] for x in range(bucket[0]) ]
-			decoder_inputs = [ [] for x in range(bucket[1]) ]
-			for x in range(model.batch_size):
-				seed = random.randint(0, data_set_size-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
-
-				start_bid_price = train_set[seed][0]
-				start_ask_price = train_set[seed][int(SECOND_VOLUME/2)]
-
-				for i in range(bucket[0]):
-					block = train_set[ (seed+i*BASE_LENGTH) : (seed+(i+1)*BASE_LENGTH)]
-					encoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
-				for i in range(bucket[1]):
-					block = train_set[ (seed+(bucket[0]+i)*BASE_LENGTH) : (seed+(bucket[0]+i+1)*BASE_LENGTH)]
-					decoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
-
-			decoder_inputs = decoder_inputs[:-1]
-			# add GO symble
-			decoder_inputs = [[[0.0 for x in range(model.input_size)] for x in range(model.batch_size)]] + decoder_inputs
-
-			# print( np.array(encoder_inputs).shape )
-			# print( np.array(decoder_inputs).shape )
+			(encoder_inputs, decoder_inputs) = get_batch(train_set)
 
 			#train
 			stepout = model.step(sess, encoder_inputs, decoder_inputs, False)
@@ -685,6 +759,11 @@ def self_test():
 		epo_counter = 0
 		while epo_counter <= epo:
 			seed_wheel = random.randint(0, wheel_part_number-1)
+			range_pair = [0, wheel[seed_wheel]]
+			if seed_wheel != 0:
+				range_pair[0] = wheel[seed_wheel-1]
+
+			(encoder_inputs, decoder_inputs) = get_batch(train_set[range_pair[0]:range_pair[1]])
 			# data random choose
 			encoder_inputs = [ [] for x in range(bucket[0]) ]
 			decoder_inputs = [ [] for x in range(bucket[1]) ]
