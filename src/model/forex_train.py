@@ -63,7 +63,7 @@ SECOND_VOLUME = 2*2 # values/second
 DATA_DIS = 5
 BASE_LENGTH = 60 # seconds
 
-NUMBER_SPLIT = 500
+NUMBER_SPLIT = 400
 BASIC_SPLIT = 0.00001
 
 IFSAVE = False
@@ -96,13 +96,13 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm
 # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("batch_size", 2, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 1, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 9, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 9, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 8, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 8, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
@@ -310,8 +310,10 @@ differ_mm = []
 def number_to_number(n, base_n):
 	period = NUMBER_SPLIT*BASIC_SPLIT/2.0
 	differ = float(n) - float(base_n)
-	differ_mm.append(float(n) - float(base_n))
+	# differ_mm.append(float(n) - float(base_n))
 	differ += period
+
+	differ_mm.append(differ/(period*2.0))
 
 	differ = differ/(period*2.0)
 	differ = (math.tanh(COMPRESS*differ)+1.0)/2.0
@@ -409,7 +411,8 @@ def get_batch(data_set):
 				_volume = float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0])
 
 				# 添加
-				_input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask, _volume]
+				_input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask]
+				# _input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask, _volume]
 				if bucket_pointer < bucket[0]:
 					encoder_inputs[bucket_pointer].append(_input_block)
 				else:
@@ -577,17 +580,17 @@ def train():
 
 				# 数据统计
 
-				# differ_np = np.array(differ_mm)
+				differ_np = np.array(differ_mm)
 
 
 				# plt.boxplot(differ_np)
 
 				# plt.show()
 
-				# plt.hist(differ_np)
-				# plt.show()
+				plt.hist(differ_np)
+				plt.show()
 
-				# break
+				break
 
 
 
