@@ -535,8 +535,8 @@ def train():
 			# 	step_time_mini = 0.0
 			if current_step % FLAGS.steps_per_checkpoint == 0:	
 
-				# print(p_out)
-				# print(t_out)
+				print(p_out)
+				print(t_out)
 
 				# print(np.array(p_out).shape)
 				# print(np.array(t_out).shape)
