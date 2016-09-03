@@ -63,7 +63,7 @@ SECOND_VOLUME = 2*2 # values/second
 DATA_DIS = 5
 BASE_LENGTH = 60 # seconds
 
-NUMBER_SPLIT = 50
+NUMBER_SPLIT = 500
 BASIC_SPLIT = 0.00001
 
 IFSAVE = False
@@ -575,25 +575,19 @@ def train():
 				# sys.stdout.flush()
 
 
-				differ_np = np.array(differ_mm)
+				# 数据统计
+
+				# differ_np = np.array(differ_mm)
 
 
 				# plt.boxplot(differ_np)
 
-				# plt.xlabel('Direct')
-
-				# plt.ylabel('Visits')
-
-				# plt.title('Direct traffic')
-
-				# plt.legend()
-
 				# plt.show()
 
-				plt.hist(differ_np)
-				plt.show()
+				# plt.hist(differ_np)
+				# plt.show()
 
-				break
+				# break
 
 
 
