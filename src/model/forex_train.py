@@ -68,7 +68,7 @@ IFTEST = True
 
 VOLUME = [99999999, 0]
 
-COMPRESS = 3
+COMPRESS = 4.5
 
 
 sess_config = tf.ConfigProto()
