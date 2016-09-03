@@ -578,19 +578,19 @@ def train():
 				# sys.stdout.flush()
 
 
-				# 数据统计
+				# # 数据统计
 
-				differ_np = np.array(differ_mm)
+				# differ_np = np.array(differ_mm)
 
 
-				# plt.boxplot(differ_np)
+				# # plt.boxplot(differ_np)
 
+				# # plt.show()
+
+				# plt.hist(differ_np)
 				# plt.show()
 
-				plt.hist(differ_np)
-				plt.show()
-
-				break
+				# break
 
 
 
