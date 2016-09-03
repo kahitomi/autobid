@@ -68,6 +68,8 @@ IFTEST = True
 
 VOLUME = [99999999, 0]
 
+COMPRESS = 3
+
 
 sess_config = tf.ConfigProto()
 # sess_config.gpu_options.allocator_type = 'BFC'
@@ -91,7 +93,7 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm
 # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 50, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 200, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
@@ -307,7 +309,7 @@ def number_to_number(n, base_n):
 	differ += period
 
 	differ = differ/(period*2.0)
-	differ = (math.tanh(4.5*differ)+1.0)/2.0
+	differ = (math.tanh(COMPRESS*differ)+1.0)/2.0
 
 	# if differ < 0.0:
 	# 	differ = 0.0
@@ -823,8 +825,8 @@ def self_test():
 			t_out_real[t_out_real > 0.999] = 0.999
 			t_out_real[t_out_real < -0.999] = -0.999
 
-			p_out_real = np.arctanh( p_out_real ) / 4.5
-			t_out_real = np.arctanh( t_out_real ) / 4.5
+			p_out_real = np.arctanh( p_out_real ) / COMPRESS
+			t_out_real = np.arctanh( t_out_real ) / COMPRESS
 
 			error_price = np.absolute(p_out_real-t_out_real)
 
