@@ -789,31 +789,31 @@ def self_test():
 			# print (range_pair)
 
 			(encoder_inputs, decoder_inputs) = get_batch(test_set[int(range_pair[0]):int(range_pair[1])])
-			# data random choose
-			encoder_inputs = [ [] for x in range(bucket[0]) ]
-			decoder_inputs = [ [] for x in range(bucket[1]) ]
-			for x in range(model.batch_size):
-				# print(seed_wheel)
-				# print(wheel[seed_wheel] - data_size/wheel_part_number)
-				# print(wheel[seed_wheel]-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
-				seed = random.randint(
-						int(wheel[seed_wheel] - data_size/wheel_part_number),
-						int(wheel[seed_wheel]-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
-					)
+			# # data random choose
+			# encoder_inputs = [ [] for x in range(bucket[0]) ]
+			# decoder_inputs = [ [] for x in range(bucket[1]) ]
+			# for x in range(model.batch_size):
+			# 	# print(seed_wheel)
+			# 	# print(wheel[seed_wheel] - data_size/wheel_part_number)
+			# 	# print(wheel[seed_wheel]-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
+			# 	seed = random.randint(
+			# 			int(wheel[seed_wheel] - data_size/wheel_part_number),
+			# 			int(wheel[seed_wheel]-1-(bucket[0]*BASE_LENGTH)-(bucket[1]*BASE_LENGTH))
+			# 		)
 
-				start_bid_price = test_set[seed][0]
-				start_ask_price = test_set[seed][int(SECOND_VOLUME/2)]
+			# 	start_bid_price = test_set[seed][0]
+			# 	start_ask_price = test_set[seed][int(SECOND_VOLUME/2)]
 
-				for i in range(bucket[0]):
-					block = test_set[ (seed+i*BASE_LENGTH) : (seed+(i+1)*BASE_LENGTH)]
-					encoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
-				for i in range(bucket[1]):
-					block = test_set[ (seed+(bucket[0]+i)*BASE_LENGTH) : (seed+(bucket[0]+i+1)*BASE_LENGTH)]
-					decoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
+			# 	for i in range(bucket[0]):
+			# 		block = test_set[ (seed+i*BASE_LENGTH) : (seed+(i+1)*BASE_LENGTH)]
+			# 		encoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
+			# 	for i in range(bucket[1]):
+			# 		block = test_set[ (seed+(bucket[0]+i)*BASE_LENGTH) : (seed+(bucket[0]+i+1)*BASE_LENGTH)]
+			# 		decoder_inputs[i].append( block_to_input(block, start_bid_price, start_ask_price) )
 
-			decoder_inputs = decoder_inputs[:-1]
-			# add GO symble
-			decoder_inputs = [[[0.0 for x in range(model.input_size)] for x in range(model.batch_size)]] + decoder_inputs
+			# decoder_inputs = decoder_inputs[:-1]
+			# # add GO symble
+			# decoder_inputs = [[[0.0 for x in range(model.input_size)] for x in range(model.batch_size)]] + decoder_inputs
 
 
 
