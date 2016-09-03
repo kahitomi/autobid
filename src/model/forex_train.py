@@ -786,9 +786,9 @@ def self_test():
 			if seed_wheel != 0:
 				range_pair[0] = wheel[seed_wheel-1]
 
-			print (range_pair)
+			# print (range_pair)
 
-			(encoder_inputs, decoder_inputs) = get_batch(test_set[range_pair[0]:range_pair[1]])
+			(encoder_inputs, decoder_inputs) = get_batch(test_set[int(range_pair[0]):int(range_pair[1])])
 			# data random choose
 			encoder_inputs = [ [] for x in range(bucket[0]) ]
 			decoder_inputs = [ [] for x in range(bucket[1]) ]
