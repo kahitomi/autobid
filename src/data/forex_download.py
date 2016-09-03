@@ -45,8 +45,9 @@ def main():
 			print response.text
 
 		print "====="
-		print json_response["candles"][0]["time"]
-		print json_response["candles"][-1]["time"]
+		if len(json_response["candles"]) > 0:
+			print json_response["candles"][0]["time"]
+			print json_response["candles"][-1]["time"]
 
 		for item in json_response["candles"]:
 			start_time = time.strptime(item["time"], "%Y-%m-%dT%H:%M:%S.000000Z")
