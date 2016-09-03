@@ -67,7 +67,7 @@ NUMBER_SPLIT = 500
 BASIC_SPLIT = 0.00001
 
 IFSAVE = False
-IFTEST = False
+IFTEST = True
 
 VOLUME = [99999999, 0]
 
@@ -94,7 +94,7 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate dec
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
 # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 2, "Batch size to use during training.")
 
 tf.app.flags.DEFINE_integer("size", 10, "Size of each model layer.")
 
@@ -110,7 +110,7 @@ tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
 # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 16100, "How many training steps to do per checkpoint.")
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 1000, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 40, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
