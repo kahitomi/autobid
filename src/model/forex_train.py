@@ -512,7 +512,7 @@ def train():
 			t_out = t_out[1:]
 
 			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = np.array(t_out)
+			label_target = ( np.array(t_out) >= 0.5 ).astype(int)
 
 			results = np.equal(label_predict,label_target)
 			results = np.sum(results, axis=2)
@@ -535,8 +535,8 @@ def train():
 			# 	step_time_mini = 0.0
 			if current_step % FLAGS.steps_per_checkpoint == 0:	
 
-				print(p_out)
-				print(t_out)
+				# print(p_out)
+				# print(t_out)
 
 				# print(np.array(p_out).shape)
 				# print(np.array(t_out).shape)
