@@ -770,7 +770,7 @@ def self_test():
 
 		# 24 picese wheel
 		data_size = len(test_set)
-		wheel_part_number = 24
+		wheel_part_number = 12
 		wheel = [ (data_size/wheel_part_number)*(x+1) for x in range(wheel_part_number)]
 
 
