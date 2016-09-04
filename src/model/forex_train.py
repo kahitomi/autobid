@@ -592,6 +592,10 @@ def train():
 
 				# break
 
+				
+
+				differ_mm = []
+
 
 
 def s2s(model, id_list):
