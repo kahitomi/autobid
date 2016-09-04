@@ -313,7 +313,7 @@ def number_to_number(n, base_n):
 	# differ_mm.append(float(n) - float(base_n))
 	differ += period
 
-	differ_mm.append(differ/(period*2.0))
+	# differ_mm.append(differ/(period*2.0))
 
 	differ = differ/(period*2.0)
 	differ = (math.tanh(COMPRESS*differ)+1.0)/2.0
