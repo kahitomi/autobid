@@ -73,7 +73,7 @@ IFTEST = False
 VOLUME_differ = []
 VOLUME = [99999999, 0]
 
-COMPRESS = 2
+COMPRESS = 1
 
 
 sess_config = tf.ConfigProto()
@@ -84,7 +84,7 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (20, 5)
+_buckets = (60, 5)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
@@ -323,7 +323,7 @@ def number_to_number(n, base_n):
 
 	differ = differ/(period*2.0)
 
-	# differ_mm.append((math.tanh(COMPRESS*differ)+1.0)/2.0)
+	differ_mm.append((math.tanh(COMPRESS*differ)+1.0)/2.0)
 
 	differ = (math.tanh(COMPRESS*differ)+1.0)/2.0
 
@@ -610,12 +610,14 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 
 
 
-				# differ_np = np.array(VOLUME_differ)
+				# # differ_np = np.array(VOLUME_differ)
 
-				# plt.boxplot(differ_np)
+				# # plt.boxplot(differ_np)
 
-				# ax=plt.gca()
-				# ax.set_yticks(np.linspace(-1.5,1.5,31)) 
+				# # ax=plt.gca()
+				# # ax.set_yticks(np.linspace(-1.5,1.5,31)) 
+
+
 
 				# plt.grid(True)
 				# plt.show()
