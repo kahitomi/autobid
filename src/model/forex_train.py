@@ -63,15 +63,17 @@ SECOND_VOLUME = 2*2 # values/second
 DATA_DIS = 5
 BASE_LENGTH = 60 # seconds
 
-NUMBER_SPLIT = 400
+
+NUMBER_SPLIT = 100
 BASIC_SPLIT = 0.00001
 
 IFSAVE = True
 IFTEST = False
 
+VOLUME_differ = []
 VOLUME = [99999999, 0]
 
-COMPRESS = 4.5
+COMPRESS = 2
 
 
 sess_config = tf.ConfigProto()
@@ -96,13 +98,13 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm
 # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 200, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 8, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 8, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 9, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 9, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
@@ -110,6 +112,7 @@ tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
 tf.app.flags.DEFINE_integer("steps_per_checkpoint", 16000, "How many training steps to do per checkpoint.")
+
 # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 800, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
@@ -235,6 +238,9 @@ def read_data(source_path, max_size=None, test=None):
 
 	print ("===== Complete load data =====")
 	print ("===== counter",counter,"=====")
+
+	print(VOLUME)
+
 	return data_set
 
 
@@ -311,11 +317,14 @@ def number_to_number(n, base_n):
 	period = NUMBER_SPLIT*BASIC_SPLIT/2.0
 	differ = float(n) - float(base_n)
 	# differ_mm.append(float(n) - float(base_n))
-	differ += period
+	# differ += period
 
 	# differ_mm.append(differ/(period*2.0))
 
 	differ = differ/(period*2.0)
+
+	# differ_mm.append((math.tanh(COMPRESS*differ)+1.0)/2.0)
+
 	differ = (math.tanh(COMPRESS*differ)+1.0)/2.0
 
 	# if differ < 0.0:
@@ -383,8 +392,8 @@ def get_batch(data_set):
 	for x in range(FLAGS.batch_size):
 		seed = random.randint(0, data_set_size-1-((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS))
 
-		start_bid_price = data_set[seed][1]
-		start_ask_price = data_set[seed][5]
+		start_bid_price = data_set[seed+bucket[0]-1][1]
+		start_ask_price = data_set[seed+bucket[0]-1][5]
 
 		has_complete = False
 		pointer = seed
@@ -408,11 +417,15 @@ def get_batch(data_set):
 				_hi_ask = number_to_number(_hi_ask, start_ask_price)
 				_lo_bid = number_to_number(_lo_bid, start_bid_price)
 				_lo_ask = number_to_number(_lo_ask, start_ask_price)
-				_volume = float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0])
+
+				_volume = (float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0]))*30.0
+				_volume = (math.tanh(2.0*_volume-2)+1.0)/2.0
+				
+				# VOLUME_differ.append(_volume)
 
 				# 添加
-				_input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask]
-				# _input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask, _volume]
+				# _input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask]
+				_input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask, _volume]
 				if bucket_pointer < bucket[0]:
 					encoder_inputs[bucket_pointer].append(_input_block)
 				else:
@@ -456,7 +469,7 @@ def get_batch(data_set):
 
 
 
-def train():
+def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 	"""Train a en->fr translation model using WMT data."""
 	# Prepare WMT data.
 
@@ -578,23 +591,39 @@ def train():
 				# sys.stdout.flush()
 
 
-				# # 数据统计
+
+				###########
+				# 数据统计
+				###########
 
 				# differ_np = np.array(differ_mm)
 
 
-				# # plt.boxplot(differ_np)
+				# plt.boxplot(differ_np)
 
-				# # plt.show()
+				# # plt.hist(differ_np)
 
-				# plt.hist(differ_np)
-				# plt.show()
+				# ax=plt.gca()
+				# ax.set_yticks(np.linspace(-1.5,1.5,31))  
+				# # ax.set_yticklabels( ('0.60', '0.65', '0.70', '0.75', '0.80','0.85','0.90','0.95'))
 
-				# break
+
+				differ_np = np.array(VOLUME_differ)
+
+				plt.boxplot(differ_np)
+
+				ax=plt.gca()
+				ax.set_yticks(np.linspace(-1.5,1.5,31)) 
+
+				plt.grid(True)
+				plt.show()
+
+				break
 
 
 
 				differ_mm = []
+				VOLUME_differ = []
 
 
 
@@ -1060,7 +1089,7 @@ if __name__ == "__main__":
 	# model_test()
 
 	if ACTION == "train":
-		train()
+		train(differ_mm)
 	elif ACTION == "test":
 		self_test()
 
