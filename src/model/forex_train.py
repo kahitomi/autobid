@@ -73,7 +73,7 @@ IFTEST = False
 VOLUME_differ = []
 VOLUME = [99999999, 0]
 
-COMPRESS = 1
+COMPRESS = 2
 
 
 sess_config = tf.ConfigProto()
