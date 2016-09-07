@@ -84,13 +84,13 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (90, 5)
+_buckets = (30, 5)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
 
-tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.01, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
@@ -113,7 +113,7 @@ tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of trai
 
 tf.app.flags.DEFINE_integer("steps_per_checkpoint", 16000, "How many training steps to do per checkpoint.")
 
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 800, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -181,7 +181,7 @@ def read_data(source_path, max_size=None, test=None):
 		###########
 		# FOR TEST
 		###########
-		if IFTEST and counter > ((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS+8000):
+		if IFTEST and counter > ((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS+100):
 			break
 
 
