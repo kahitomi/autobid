@@ -420,7 +420,7 @@ def get_batch(data_set):
 
 				_volume = (float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0]))*30.0
 				_volume = (math.tanh(2.0*_volume-2)+1.0)/2.0
-				
+
 				# VOLUME_differ.append(_volume)
 
 				# 添加
@@ -608,17 +608,19 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 				# # ax.set_yticklabels( ('0.60', '0.65', '0.70', '0.75', '0.80','0.85','0.90','0.95'))
 
 
-				differ_np = np.array(VOLUME_differ)
 
-				plt.boxplot(differ_np)
 
-				ax=plt.gca()
-				ax.set_yticks(np.linspace(-1.5,1.5,31)) 
+				# differ_np = np.array(VOLUME_differ)
 
-				plt.grid(True)
-				plt.show()
+				# plt.boxplot(differ_np)
 
-				break
+				# ax=plt.gca()
+				# ax.set_yticks(np.linspace(-1.5,1.5,31)) 
+
+				# plt.grid(True)
+				# plt.show()
+
+				# break
 
 
 
