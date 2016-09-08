@@ -61,7 +61,7 @@ SOURCE_PATH = "src/data/forex/"
 
 SECOND_VOLUME = 2*2 # values/second
 DATA_DIS = 5
-BASE_LENGTH = 60 # seconds
+BASE_LENGTH = 300 # seconds
 
 
 NUMBER_SPLIT = 100
@@ -84,13 +84,13 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (30, 5)
+_buckets = (6, 2)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
 
-tf.app.flags.DEFINE_float("learning_rate", 0.05, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
 tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
 
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
@@ -103,17 +103,17 @@ tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 9, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 9, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 5, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 5, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 16000, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 16000, "How many training steps to do per checkpoint.")
 
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 10, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 3400, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -392,74 +392,121 @@ def get_batch(data_set):
 	for x in range(FLAGS.batch_size):
 		seed = random.randint(0, data_set_size-1-((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS))
 
-		start_bid_price = data_set[seed+bucket[0]-1][1]
-		start_ask_price = data_set[seed+bucket[0]-1][5]
+
+		time_pointer = datetime.datetime.strptime(data_set[seed][0], "%Y-%m-%dT%H:%M:%S.000000Z")
+
+		# 生成 时间分段
+		bucket_time_list = [ time_pointer+datetime.timedelta(seconds=((i+1)*BASE_LENGTH)) for i in range(bucket[0]+bucket[1]) ]
+
+
+
+		# 找到基础价格
+		i = 0
+		start_mid_price = data_set[seed][1]
+		for bucket_pointer in range(bucket[0]):
+			just_started = True
+			while True:
+				current_time = datetime.datetime.strptime(data_set[seed+i][0], "%Y-%m-%dT%H:%M:%S.000000Z")
+				if current_time <= bucket_time_list[bucket_pointer]:
+					# print("*",i)
+					if just_started:
+						start_mid_price = data_set[seed+i][1]
+						just_started = False
+					i += 1
+				else:
+					break
+				
+
+		# print("*****",i)
+		# # start_bid_price = data_set[seed+bucket[0]-1][1]
+		# # start_ask_price = data_set[seed+bucket[0]-1][5]
+
+		# start_mid_price = data_set[seed][1]
+		# # start_mid_price = data_set[seed+bucket[0]-1][1]
 
 		has_complete = False
 		pointer = seed
 		bucket_pointer = 0
-		time_pointer = datetime.datetime.strptime(data_set[seed][0], "%Y-%m-%dT%H:%M:%S.000000Z")
-		[_op_bid, _cl_bid, _hi_bid, _lo_bid, _op_ask, _cl_ask, _hi_ask, _lo_ask] = data_set[seed][1:-1]
+		# [_op_bid, _cl_bid, _hi_bid, _lo_bid, _op_ask, _cl_ask, _hi_ask, _lo_ask] = data_set[seed][1:-1]
+		[_op_mid, _cl_mid, _hi_mid, _lo_mid] = data_set[seed][1:-1]
 		_volume = 0.0
-		while not has_complete:
-			item = data_set[pointer]
-			current_time = datetime.datetime.strptime(item[0], "%Y-%m-%dT%H:%M:%S.000000Z")
+		# print ("Batch=========")
+		for bucket_pointer in range(len(bucket_time_list)):
 
-			# 一个输入完成
-			if (current_time - time_pointer).seconds > 60:
-				time_pointer = current_time
-				# 最后处理
-				_op_bid = number_to_number(_op_bid, start_bid_price)
-				_op_ask = number_to_number(_op_ask, start_ask_price)
-				_cl_bid = number_to_number(_cl_bid, start_bid_price)
-				_cl_ask = number_to_number(_cl_ask, start_ask_price)
-				_hi_bid = number_to_number(_hi_bid, start_bid_price)
-				_hi_ask = number_to_number(_hi_ask, start_ask_price)
-				_lo_bid = number_to_number(_lo_bid, start_bid_price)
-				_lo_ask = number_to_number(_lo_ask, start_ask_price)
+			just_started = True
+			while True:
+				item = data_set[pointer]
+				current_time = datetime.datetime.strptime(item[0], "%Y-%m-%dT%H:%M:%S.000000Z")
 
-				_volume = (float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0]))*30.0
-				_volume = (math.tanh(2.0*_volume-2)+1.0)/2.0
+				# print (current_time," : ",bucket_time_list[bucket_pointer])
+				# 搜集数据
+				if current_time <= bucket_time_list[bucket_pointer]:
+					if just_started:
+						# print("*",pointer-seed)
+						[_op_mid, _cl_mid, _hi_mid, _lo_mid] = item[1:-1]
+						_volume = 0.0
+						just_started = False
+					# 滚动操作
+					_cl_mid = item[2]
+					if _hi_mid < item[3]:
+						_hi_mid = item[3]
+					if _lo_mid > item[4]:
+						_lo_mid = item[4]
+					_volume += float(item[-1])
+					pointer += 1
 
-				# VOLUME_differ.append(_volume)
 
-				# 添加
-				# _input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask]
-				_input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask, _volume]
-				if bucket_pointer < bucket[0]:
-					encoder_inputs[bucket_pointer].append(_input_block)
+				# 一个输入完成
 				else:
-					decoder_inputs[bucket_pointer-bucket[0]].append(_input_block)
+					# print("*****",pointer-seed)
+					time_pointer = current_time
+					# 最后处理
+					# _op_bid = number_to_number(_op_bid, start_bid_price)
+					# _op_ask = number_to_number(_op_ask, start_ask_price)
+					# _cl_bid = number_to_number(_cl_bid, start_bid_price)
+					# _cl_ask = number_to_number(_cl_ask, start_ask_price)
+					# _hi_bid = number_to_number(_hi_bid, start_bid_price)
+					# _hi_ask = number_to_number(_hi_ask, start_ask_price)
+					# _lo_bid = number_to_number(_lo_bid, start_bid_price)
+					# _lo_ask = number_to_number(_lo_ask, start_ask_price)
 
-				# 完成判断
-				bucket_pointer += 1
-				# print (bucket_pointer, "/", sum(bucket))
-				if bucket_pointer >= sum(bucket):
-					has_complete = True
+					_op_mid_input = number_to_number(_op_mid, start_mid_price)
+					_cl_mid_input = number_to_number(_cl_mid, start_mid_price)
+					_hi_mid_input = number_to_number(_hi_mid, start_mid_price)
+					_lo_mid_input = number_to_number(_lo_mid, start_mid_price)
 
-				#复原 初始化
-				[_op_bid, _cl_bid, _hi_bid, _lo_bid, _op_ask, _cl_ask, _hi_ask, _lo_ask] = item[1:-1]
-				_volume = 0.0
 
-			# 滚动操作
-			_cl_bid = item[2]
-			_cl_ask = item[6]
-			if _hi_bid < item[3]:
-				_hi_bid = item[3]
-			if _hi_ask < item[7]:
-				_hi_ask = item[7]
-			if _lo_bid > item[4]:
-				_lo_bid = item[4]
-			if _lo_ask > item[8]:
-				_lo_ask = item[8]
-			_volume += float(item[-1])
-			pointer += 1
+					_volume_input = (float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0]))*90.0
+					_volume_input = (math.tanh(2.0*_volume_input-2)+1.0)/2.0
+
+					# VOLUME_differ.append(_volume)
+
+					# if _op_mid < 0 or _cl_mid < 0 or _hi_mid < 0 or _lo_mid < 0 or _volume < 0:
+					# 	print("<<<<<<<<<<0000000000000")
+
+					# 添加
+					# _input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask]
+					_input_block = [_op_mid_input, _cl_mid_input, _hi_mid_input, _lo_mid_input, _volume_input]
+					# print(_input_block)
+					if bucket_pointer < bucket[0]:
+						encoder_inputs[bucket_pointer].append(_input_block)
+					else:
+						decoder_inputs[bucket_pointer-bucket[0]].append(_input_block)
+
+					break
+
+
+
+				
 
 
 
 	decoder_inputs = decoder_inputs[:-1]
+	# print( np.array(decoder_inputs).shape )
 	# add GO symble
-	decoder_inputs = [[[0.0 for x in range(FLAGS.target_vocab_size)] for x in range(FLAGS.batch_size)]] + decoder_inputs
+	GO = [[[0.0 for x in range(FLAGS.target_vocab_size)] for x in range(FLAGS.batch_size)]]
+	# print( np.array(GO).shape )
+	decoder_inputs =  GO + decoder_inputs
 
 	# print( np.array(encoder_inputs).shape )
 	# print( np.array(decoder_inputs).shape )
@@ -524,14 +571,17 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
 
-			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = ( np.array(t_out) >= 0.5 ).astype(int)
+			# label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
+			# label_target = ( np.array(t_out) >= 0.5 ).astype(int)
 
-			results = np.equal(label_predict,label_target)
-			results = np.sum(results, axis=2)
-			results = (results == model.output_size).astype(int)
+			# results = np.equal(label_predict,label_target)
+			# results = np.sum(results, axis=2)
+			# results = (results == model.output_size).astype(int)
+			
+			results = ( np.array(p_out)-np.array(t_out) < 2.0/NUMBER_SPLIT ).astype(int)
 
-			true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+
+			true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size*model.output_size)
 
 			accuracy += true_accuracy / FLAGS.steps_per_checkpoint
 
@@ -622,6 +672,16 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 				# plt.grid(True)
 				# plt.show()
 
+
+				# # print(encoder_inputs[0])
+				# # print(encoder_inputs[1])
+				# # print(encoder_inputs[2])
+				# # print(encoder_inputs[3])
+				# # print(encoder_inputs[4])
+				# # print(encoder_inputs[5])
+				
+				# # print(decoder_inputs[0])
+				# # print(decoder_inputs[1])
 				# break
 
 
@@ -1093,7 +1153,7 @@ if __name__ == "__main__":
 	# model_test()
 
 	if ACTION == "train":
-		train(differ_mm)
+		train()
 	elif ACTION == "test":
 		self_test()
 

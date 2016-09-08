@@ -14,7 +14,7 @@ START_TIME = sys.argv[2]
 END_TIME = sys.argv[3]
 
 
-granularity = "S5"
+granularity = "M1"
 output_path = "src/data/forex/"
 output_file_name = FOREX_NAME+"_"+START_TIME+"_"+END_TIME+".csv"
 
@@ -34,7 +34,7 @@ def main():
 				"granularity": granularity,
 				"start": time.strftime('%Y-%m-%dT%H:%M:%S.000000Z', start_time),
 				# "end": END_TIME,
-				"candleFormat": "bidask",
+				"candleFormat": "midpoint", # midpoint bidask
 				"includeFirst": "false",
 				"count": 4000
 			}
@@ -55,17 +55,25 @@ def main():
 				print "LAST"
 				print item["time"]
 				break
+			# _out = [ 
+			# 		item["time"],
+			# 		item["openBid"],
+			# 		item["closeBid"],
+			# 		item["highBid"],
+			# 		item["lowBid"],
+			# 		item["openAsk"],
+			# 		item["closeAsk"],
+			# 		item["highAsk"],
+			# 		item["lowAsk"],
+			# 		item["volume"],
+			# 	]
 			_out = [ 
 					item["time"],
-					item["openBid"],
-					item["closeBid"],
-					item["highBid"],
-					item["lowBid"],
-					item["openAsk"],
-					item["closeAsk"],
-					item["highAsk"],
-					item["lowAsk"],
-					item["volume"],
+					item["openMid"],
+					item["closeMid"],
+					item["highMid"],
+					item["lowMid"],
+					item["volume"]
 				]
 			writer.writerow(_out)
 			writer_counter += 1
