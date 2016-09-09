@@ -96,7 +96,7 @@ tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate dec
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
 # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 20, "Batch size to use during training.")
 
 tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 
@@ -113,7 +113,7 @@ tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of trai
 
 # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 16000, "How many training steps to do per checkpoint.")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 2800, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 8800, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
