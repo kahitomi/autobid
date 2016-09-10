@@ -25,8 +25,11 @@ from tensorflow.python.ops import variable_scope
 import seq2seq as seq2seq_model
 # from IAS import tf_seq2seq_one2one as seq2seq_model
 # from IAS import word2vec, word_segmentation
+import time_align
 
 import matplotlib.pyplot as plt
+
+import talib
 
 
 # from common import config
@@ -60,7 +63,7 @@ SOURCE_PATH = "src/data/forex/"
 
 
 SECOND_VOLUME = 2*2 # values/second
-DATA_DIS = 5
+DATA_DIS = 60
 BASE_LENGTH = 300 # seconds
 
 
@@ -103,17 +106,17 @@ tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 5, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 5, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 2, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 2, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 16000, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 8800, "How many training steps to do per checkpoint.")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 8800, "How many training steps to do per checkpoint.")
+tf.app.flags.DEFINE_integer("steps_per_checkpoint", 1500, "How many training steps to do per checkpoint.")
 
 tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
 tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
@@ -148,36 +151,58 @@ def read_data(source_path, max_size=None, test=None):
 			len(target) < _buckets[n][1]; source and target are lists of token-ids.
 	"""
 
-	data_set = [[] for _ in _buckets]
+	# data_set = [[] for _ in _buckets]
 
-	file_obj = open(source_path)
-	reader = csv.reader(file_obj)
+	# file_obj = open(source_path)
+	# reader = csv.reader(file_obj)
 
 	counter = 0
 
 	# file_list = os.listdir(source_path)
 	# totle_counter = len(file_list)
 
- 
+ 	
+	data_align_set = time_align.load(source_path)
 
-	# 直接转入data
+
+	# talib转化
+	data_close = [ float(x[2]) for x in data_align_set ]
+	data_high = [ float(x[3]) for x in data_align_set ]
+	data_low = [ float(x[4]) for x in data_align_set ]
+
+	data_EMA = talib.EMA(np.array(data_close), timeperiod=30)
+	# plt.plot(data_EMA[:100])
+	# plt.boxplot(np.array(data_EMA))
+	# plt.show()
+
+	data_WILLR = talib.WILLR(np.array(data_high), np.array(data_low), np.array(data_close), timeperiod=14)
+	data_WILLR = -data_WILLR/100.0 # normalize
+	# plt.plot(data_WILLR[:100])
+	# plt.boxplot(data_WILLR)
+	# plt.show()
+
+
+	# data_APO = talib.APO(np.array(data_close), fastperiod=12, slowperiod=26, matype=0)
+	# # plt.plot(data_APO[:100])
+	# # plt.show()
+
+	# data_ROC = talib.ROC(np.array(data_close), timeperiod=10)
+	# # plt.plot(data_ROC[:100])
+	# # plt.show()
+
+
+
+
 	data_set = []
-	v_list = []
-	for item in reader:
+
+	for i in range(50, len(data_close)-50):
+		item = [
+				data_EMA[i],
+				data_WILLR[i]
+			]
 		data_set.append(item)
 
-		v_list.append(int(item[-1]))
-		if len(v_list) > BASE_LENGTH/DATA_DIS:
-			v_list = v_list[(-int(BASE_LENGTH/DATA_DIS)):]
-
-		v = sum(v_list)
-		if v < VOLUME[0]:
-			VOLUME[0] = v
-		if v > VOLUME[1]:
-			VOLUME[1] = v
-
 		counter += 1
-
 		###########
 		# FOR TEST
 		###########
@@ -187,59 +212,40 @@ def read_data(source_path, max_size=None, test=None):
 
 
 
-	# # 变换到基本长度
-	# print("Start to Transform to basic units")
-	# base_units = []
-	# history_second_prices = []
-	# for second_prices in reader:
-	# 	if len(history_second_prices) == BASE_LENGTH:
-	# 		_unit = []
-	# 		for x in history_second_prices:
-	# 			_unit += x
-	# 		# print(_unit)
-	# 		base_units.append(_unit)
-	# 		# break
-	# 		counter += 1
-	# 		history_second_prices = []
-	# 		if counter%10000 == 0:
-	# 			print("Reading basic units",counter)
-	# 			# break
 
-	# 	history_second_prices.append(second_prices)
-	# 	if len(history_second_prices) > BASE_LENGTH:
-	# 		history_second_prices = history_second_prices[-BASE_LENGTH:]
-	# file_obj.close()
-	# print("Complete basic units",counter)
 
-	# # 组合输入输出
-	# print("Creating sources and targets")
-	# counter = 0
-	# source_unit_length = _buckets[0][0]
-	# target_unit_length = _buckets[0][1]
-	# max_unit_number = len(base_units)
-	# for point in range(max_unit_number):
-	# 	if point < source_unit_length or point > max_unit_number-target_unit_length:
-	# 		continue
-	# 	source_units = base_units[(point-source_unit_length):point]
-	# 	target_units = base_units[point:(point+target_unit_length)]
 
-	# 	data_set[0].append([source_units, target_units])
+
+	# # 直接转入data
+	# data_set = []
+	# v_list = []
+	# for item in data_align_set:
+	# 	data_set.append(item)
+
+	# 	v_list.append(int(item[-1]))
+	# 	if len(v_list) > BASE_LENGTH/DATA_DIS:
+	# 		v_list = v_list[(-int(BASE_LENGTH/DATA_DIS)):]
+
+	# 	v = sum(v_list)
+	# 	if v < VOLUME[0]:
+	# 		VOLUME[0] = v
+	# 	if v > VOLUME[1]:
+	# 		VOLUME[1] = v
 
 	# 	counter += 1
 
 	# 	###########
 	# 	# FOR TEST
 	# 	###########
-	# 	if counter > 200:
+	# 	if IFTEST and counter > ((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS+100):
 	# 		break
-
 
 
 
 	print ("===== Complete load data =====")
 	print ("===== counter",counter,"=====")
 
-	print(VOLUME)
+	# print(VOLUME)
 
 	return data_set
 
@@ -392,110 +398,28 @@ def get_batch(data_set):
 	for x in range(FLAGS.batch_size):
 		seed = random.randint(0, data_set_size-1-((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS))
 
-
-		time_pointer = datetime.datetime.strptime(data_set[seed][0], "%Y-%m-%dT%H:%M:%S.000000Z")
-
-		# 生成 时间分段
-		bucket_time_list = [ time_pointer+datetime.timedelta(seconds=((i+1)*BASE_LENGTH)) for i in range(bucket[0]+bucket[1]) ]
-
+		l_index = int(seed+(bucket[0]-1)*BASE_LENGTH/DATA_DIS)
+		r_index = int(seed+(bucket[0])*BASE_LENGTH/DATA_DIS)
+		block = np.array(data_set[ l_index : r_index ])
+		start_price = np.average(block[:,0])
 
 
-		# 找到基础价格
-		i = 0
-		start_mid_price = data_set[seed][1]
-		for bucket_pointer in range(bucket[0]):
-			just_started = True
-			while True:
-				current_time = datetime.datetime.strptime(data_set[seed+i][0], "%Y-%m-%dT%H:%M:%S.000000Z")
-				if current_time <= bucket_time_list[bucket_pointer]:
-					# print("*",i)
-					if just_started:
-						start_mid_price = data_set[seed+i][1]
-						just_started = False
-					i += 1
-				else:
-					break
-				
+		for bucket_id in range(sum(bucket)):
+			l_index = int(seed+bucket_id*BASE_LENGTH/DATA_DIS)
+			r_index = int(seed+(bucket_id+1)*BASE_LENGTH/DATA_DIS)
+			block = np.array(data_set[ l_index : r_index ])
 
-		# print("*****",i)
-		# # start_bid_price = data_set[seed+bucket[0]-1][1]
-		# # start_ask_price = data_set[seed+bucket[0]-1][5]
+			_avr_ema = np.average(block[:,0])
+			_avr_ema = number_to_number(_avr_ema, start_price)
 
-		# start_mid_price = data_set[seed][1]
-		# # start_mid_price = data_set[seed+bucket[0]-1][1]
+			_avr_wil = np.average(block[:,1])
 
-		has_complete = False
-		pointer = seed
-		bucket_pointer = 0
-		# [_op_bid, _cl_bid, _hi_bid, _lo_bid, _op_ask, _cl_ask, _hi_ask, _lo_ask] = data_set[seed][1:-1]
-		[_op_mid, _cl_mid, _hi_mid, _lo_mid] = data_set[seed][1:-1]
-		_volume = 0.0
-		# print ("Batch=========")
-		for bucket_pointer in range(len(bucket_time_list)):
+			_input = [_avr_ema, _avr_wil]
 
-			just_started = True
-			while True:
-				item = data_set[pointer]
-				current_time = datetime.datetime.strptime(item[0], "%Y-%m-%dT%H:%M:%S.000000Z")
-
-				# print (current_time," : ",bucket_time_list[bucket_pointer])
-				# 搜集数据
-				if current_time <= bucket_time_list[bucket_pointer]:
-					if just_started:
-						# print("*",pointer-seed)
-						[_op_mid, _cl_mid, _hi_mid, _lo_mid] = item[1:-1]
-						_volume = 0.0
-						just_started = False
-					# 滚动操作
-					_cl_mid = item[2]
-					if _hi_mid < item[3]:
-						_hi_mid = item[3]
-					if _lo_mid > item[4]:
-						_lo_mid = item[4]
-					_volume += float(item[-1])
-					pointer += 1
-
-
-				# 一个输入完成
-				else:
-					# print("*****",pointer-seed)
-					time_pointer = current_time
-					# 最后处理
-					# _op_bid = number_to_number(_op_bid, start_bid_price)
-					# _op_ask = number_to_number(_op_ask, start_ask_price)
-					# _cl_bid = number_to_number(_cl_bid, start_bid_price)
-					# _cl_ask = number_to_number(_cl_ask, start_ask_price)
-					# _hi_bid = number_to_number(_hi_bid, start_bid_price)
-					# _hi_ask = number_to_number(_hi_ask, start_ask_price)
-					# _lo_bid = number_to_number(_lo_bid, start_bid_price)
-					# _lo_ask = number_to_number(_lo_ask, start_ask_price)
-
-					_op_mid_input = number_to_number(_op_mid, start_mid_price)
-					_cl_mid_input = number_to_number(_cl_mid, start_mid_price)
-					_hi_mid_input = number_to_number(_hi_mid, start_mid_price)
-					_lo_mid_input = number_to_number(_lo_mid, start_mid_price)
-
-
-					_volume_input = (float(_volume-VOLUME[0])/float(VOLUME[1]-VOLUME[0]))*90.0
-					_volume_input = (math.tanh(2.0*_volume_input-2)+1.0)/2.0
-
-					# VOLUME_differ.append(_volume)
-
-					# if _op_mid < 0 or _cl_mid < 0 or _hi_mid < 0 or _lo_mid < 0 or _volume < 0:
-					# 	print("<<<<<<<<<<0000000000000")
-
-					# 添加
-					# _input_block = [_op_bid, _op_ask, _cl_bid, _cl_ask, _hi_bid, _hi_ask, _lo_bid, _lo_ask]
-					_input_block = [_op_mid_input, _cl_mid_input, _hi_mid_input, _lo_mid_input, _volume_input]
-					# print(_input_block)
-					if bucket_pointer < bucket[0]:
-						encoder_inputs[bucket_pointer].append(_input_block)
-					else:
-						decoder_inputs[bucket_pointer-bucket[0]].append(_input_block)
-
-					break
-
-
+			if bucket_id < bucket[0]:
+				encoder_inputs[bucket_id].append(_input)
+			else:
+				decoder_inputs[bucket_id-bucket[0]].append(_input)
 
 				
 
@@ -570,6 +494,9 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
+
+			p_out = p_out[:,:,0]
+			t_out = t_out[:,:,0]
 
 			# label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
 			# label_target = ( np.array(t_out) >= 0.5 ).astype(int)
@@ -924,6 +851,9 @@ def self_test():
 
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
+
+			p_out = p_out[:,:,0]
+			t_out = t_out[:,:,0]
 
 			# # Error calculate
 			# p_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
