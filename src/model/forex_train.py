@@ -882,7 +882,7 @@ def self_test():
 
 			# error_price = np.absolute(np.array(p_out)-np.array(t_out))
 			error_price = np.average(error_price, axis=1)
-			error_price = np.average(error_price, axis=1)
+			# error_price = np.average(error_price, axis=1)
 
 			# print(p_price[-1][0])
 
