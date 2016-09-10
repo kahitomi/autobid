@@ -896,7 +896,7 @@ def self_test():
 
 			# error_dis = np.sqrt(np.power(np.array(p_out)-np.array(t_out), 2))
 			error_dis = np.average(error_dis, axis=1)
-			error_dis = np.average(error_dis, axis=1)
+			# error_dis = np.average(error_dis, axis=1)
 
 			final_error_dis_collect[seed_wheel].append(error_dis)
 
