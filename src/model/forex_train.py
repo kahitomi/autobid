@@ -170,7 +170,7 @@ def read_data(source_path, max_size=None, test=None):
 	data_high = [ float(x[3]) for x in data_align_set ]
 	data_low = [ float(x[4]) for x in data_align_set ]
 
-	ax=plt.gca()
+	# ax=plt.gca()
 
 
 	data_EMA = talib.EMA(np.array(data_close), timeperiod=30)
