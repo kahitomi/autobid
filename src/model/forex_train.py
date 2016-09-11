@@ -106,8 +106,8 @@ tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 3, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 3, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 5, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 5, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
@@ -191,6 +191,13 @@ def read_data(source_path, max_size=None, test=None):
 	# plt.boxplot(np.array(data_RSI))
 
 
+	data_slowk, data_slowd = talib.STOCH(np.array(data_high), np.array(data_low), np.array(data_close), fastk_period=5, slowk_period=3, slowk_matype=0, slowd_period=3, slowd_matype=0)
+	data_slowk = data_slowk/100.0 # normalize
+	# plt.boxplot(np.array(data_slowk))
+	data_slowd = data_slowd/100.0 # normalize
+	# plt.boxplot(np.array(data_slowd))
+
+
 
 	data_macd, data_macdsignal, data_macdhist = talib.MACD(np.array(data_close), fastperiod=12, slowperiod=26, signalperiod=9)
 	# plt.plot(data_macd[:100])
@@ -217,7 +224,12 @@ def read_data(source_path, max_size=None, test=None):
 		item = [
 				data_EMA[i],
 				data_WILLR[i],
-				data_RSI[i]
+				data_RSI[i],
+				data_slowk[i],
+				data_slowd[i],
+				data_macd[i],
+				data_macdsignal[i],
+				data_macdhist[i]
 			]
 		data_set.append(item)
 
@@ -433,8 +445,10 @@ def get_batch(data_set):
 
 			_avr_wil = np.average(block[:,1])
 			_avr_rsi = np.average(block[:,2])
+			_avr_slowk = np.average(block[:,3])
+			_avr_slowd = np.average(block[:,4])
 
-			_input = [_avr_ema, _avr_wil, _avr_rsi]
+			_input = [_avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd]
 
 			if bucket_id < bucket[0]:
 				encoder_inputs[bucket_id].append(_input)
@@ -478,7 +492,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 
 		train_set = read_data(SOURCE_PATH+CSV_NAME)
 
-		# return False
+		return False
 
 
 		# This is the training loop.
