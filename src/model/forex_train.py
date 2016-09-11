@@ -492,7 +492,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 
 		train_set = read_data(SOURCE_PATH+CSV_NAME)
 
-		return False
+		# return False
 
 
 		# This is the training loop.
