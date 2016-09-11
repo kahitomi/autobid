@@ -106,8 +106,8 @@ tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 5, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 5, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 8, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 8, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
@@ -447,6 +447,11 @@ def get_batch(data_set):
 			_avr_rsi = np.average(block[:,2])
 			_avr_slowk = np.average(block[:,3])
 			_avr_slowd = np.average(block[:,4])
+			_avr_macd = np.average(block[:,5])
+			_avr_macdsignal = np.average(block[:,6])
+			_avr_macdhist = np.average(block[:,7])
+
+
 
 			_input = [_avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd]
 
