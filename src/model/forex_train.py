@@ -106,8 +106,8 @@ tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 2, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 2, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 3, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 3, "French vocabulary size.")
 
 tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
 tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
@@ -177,14 +177,20 @@ def read_data(source_path, max_size=None, test=None):
 	# plt.plot(data_EMA[:100])
 	# plt.boxplot(np.array(data_EMA))
 
+
+
 	data_WILLR = talib.WILLR(np.array(data_high), np.array(data_low), np.array(data_close), timeperiod=14)
 	data_WILLR = -data_WILLR/100.0 # normalize
 	# plt.plot(data_WILLR[:100])
 	# plt.boxplot(data_WILLR)
 
 
-	# data_APO = talib.APO(np.array(data_close), fastperiod=12, slowperiod=26, matype=0)
-	# # plt.plot(data_APO[:100])
+	data_RSI = talib.RSI(np.array(data_close), timeperiod=14)
+	data_RSI = data_RSI/100.0 # normalize
+	# plt.plot(data_RSI[:100])
+	# plt.boxplot(np.array(data_RSI))
+
+
 
 	data_macd, data_macdsignal, data_macdhist = talib.MACD(np.array(data_close), fastperiod=12, slowperiod=26, signalperiod=9)
 	# plt.plot(data_macd[:100])
@@ -199,8 +205,8 @@ def read_data(source_path, max_size=None, test=None):
 
 
 
-	# plt.grid(True)
-	# plt.show()
+	plt.grid(True)
+	plt.show()
 
 
 
@@ -210,7 +216,8 @@ def read_data(source_path, max_size=None, test=None):
 	for i in range(50, len(data_close)-50):
 		item = [
 				data_EMA[i],
-				data_WILLR[i]
+				data_WILLR[i],
+				data_RSI[i]
 			]
 		data_set.append(item)
 
@@ -425,8 +432,9 @@ def get_batch(data_set):
 			_avr_ema = number_to_number(_avr_ema, start_price)
 
 			_avr_wil = np.average(block[:,1])
+			_avr_rsi = np.average(block[:,2])
 
-			_input = [_avr_ema, _avr_wil]
+			_input = [_avr_ema, _avr_wil, _avr_rsi]
 
 			if bucket_id < bucket[0]:
 				encoder_inputs[bucket_id].append(_input)
