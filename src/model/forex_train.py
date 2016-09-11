@@ -453,7 +453,7 @@ def get_batch(data_set):
 
 
 
-			_input = [_avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd]
+			_input = [_avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
 
 			if bucket_id < bucket[0]:
 				encoder_inputs[bucket_id].append(_input)
