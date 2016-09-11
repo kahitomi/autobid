@@ -205,8 +205,8 @@ def read_data(source_path, max_size=None, test=None):
 
 
 
-	plt.grid(True)
-	plt.show()
+	# plt.grid(True)
+	# plt.show()
 
 
 
