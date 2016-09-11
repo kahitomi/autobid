@@ -87,7 +87,7 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (8, 3)
+_buckets = (12, 3)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
