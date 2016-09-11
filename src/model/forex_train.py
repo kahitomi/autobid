@@ -64,7 +64,7 @@ SOURCE_PATH = "src/data/forex/"
 
 SECOND_VOLUME = 2*2 # values/second
 DATA_DIS = 60
-BASE_LENGTH = 300 # seconds
+BASE_LENGTH = 120 # seconds
 
 
 NUMBER_SPLIT = 100
@@ -87,7 +87,7 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (6, 2)
+_buckets = (8, 3)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
