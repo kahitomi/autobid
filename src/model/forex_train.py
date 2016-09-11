@@ -25,7 +25,7 @@ from tensorflow.python.ops import variable_scope
 import seq2seq as seq2seq_model
 # from IAS import tf_seq2seq_one2one as seq2seq_model
 # from IAS import word2vec, word_segmentation
-import time_align
+import time_align, norm
 
 import matplotlib.pyplot as plt
 
@@ -170,25 +170,37 @@ def read_data(source_path, max_size=None, test=None):
 	data_high = [ float(x[3]) for x in data_align_set ]
 	data_low = [ float(x[4]) for x in data_align_set ]
 
+	ax=plt.gca()
+
+
 	data_EMA = talib.EMA(np.array(data_close), timeperiod=30)
 	# plt.plot(data_EMA[:100])
 	# plt.boxplot(np.array(data_EMA))
-	# plt.show()
 
 	data_WILLR = talib.WILLR(np.array(data_high), np.array(data_low), np.array(data_close), timeperiod=14)
 	data_WILLR = -data_WILLR/100.0 # normalize
 	# plt.plot(data_WILLR[:100])
 	# plt.boxplot(data_WILLR)
-	# plt.show()
 
 
 	# data_APO = talib.APO(np.array(data_close), fastperiod=12, slowperiod=26, matype=0)
 	# # plt.plot(data_APO[:100])
-	# # plt.show()
 
-	# data_ROC = talib.ROC(np.array(data_close), timeperiod=10)
-	# # plt.plot(data_ROC[:100])
-	# # plt.show()
+	data_macd, data_macdsignal, data_macdhist = talib.MACD(np.array(data_close), fastperiod=12, slowperiod=26, signalperiod=9)
+	# plt.plot(data_macd[:100])
+	# ax.set_yticks(np.linspace(-0.0005,0.0005,11))
+
+	data_macd = norm.tanh(data_macd, 0.0008)
+	# plt.boxplot(data_macd)
+	data_macdsignal = norm.tanh(data_macdsignal, 0.0008)
+	# plt.boxplot(data_macdsignal)
+	data_macdhist = norm.tanh(data_macdhist, 0.0003)
+	# plt.boxplot(data_macdhist)
+
+
+
+	# plt.grid(True)
+	# plt.show()
 
 
 
@@ -457,6 +469,8 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 		print ("Reading development and training data.")
 
 		train_set = read_data(SOURCE_PATH+CSV_NAME)
+
+		# return False
 
 
 		# This is the training loop.
