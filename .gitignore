@@ -13,5 +13,6 @@
 *.csv
 src/data/forex/*
 src/model/forex/*
+src/model/forex_trader/*
 
 common/config.py
