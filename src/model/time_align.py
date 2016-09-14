@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# 导入下载的外汇csv文件，生成时间对其的数据
+# 数据时间对其
 
 import csv, datetime
 

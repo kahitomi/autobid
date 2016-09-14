@@ -22,12 +22,14 @@ from tensorflow.python.ops import variable_scope
 # from common import tf_serving
 # from tensorflow_serving.session_bundle import exporter
 
-import seq2seq as seq2seq_model
+import rnn_memory_classify as seq2seq_model
 # from IAS import tf_seq2seq_one2one as seq2seq_model
 # from IAS import word2vec, word_segmentation
-import time_align, norm
+import time_align, norm, trade_points
 
 import matplotlib.pyplot as plt
+from matplotlib.finance import candlestick
+from matplotlib.dates import num2date
 
 import talib
 
@@ -87,7 +89,7 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (30, 3)
+_buckets = (5, 2)
 bucket = _buckets
 
 tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
@@ -106,11 +108,11 @@ tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
 # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
 # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 8, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 8, "French vocabulary size.")
+tf.app.flags.DEFINE_integer("source_vocab_size", 10, "English vocabulary size.")
+tf.app.flags.DEFINE_integer("target_vocab_size", 3, "French vocabulary size.")
 
-tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
-tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
+# tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
+tf.app.flags.DEFINE_string("train_dir", "src/model/forex_trader/"+SAVE_NAME, "Training directory.")
 
 tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
@@ -162,21 +164,42 @@ def read_data(source_path, max_size=None, test=None):
 	# totle_counter = len(file_list)
 
  	
-	data_align_set = time_align.load(source_path)
+	# data_align_set = time_align.load(source_path)
+
+	data_set = trade_points.load(source_path)
+
+
 
 
 	# talib转化
-	data_close = [ float(x[2]) for x in data_align_set ]
-	data_high = [ float(x[3]) for x in data_align_set ]
-	data_low = [ float(x[4]) for x in data_align_set ]
+	data_close = [ float(x[2]) for x in data_set ]
+	data_high = [ float(x[3]) for x in data_set ]
+	data_low = [ float(x[4]) for x in data_set ]
+	data_trader = [ x[6] for x in data_set ]
+
+
+
 
 	# ax=plt.gca()
+	# candlestick(ax, data_candle, width=1, colorup='g', colordown='r')
+
+
+
+
+	# print(data_trader[:100])
+
 
 
 	data_EMA = talib.EMA(np.array(data_close), timeperiod=30)
+	data_EMAs = talib.EMA(np.array(data_close), timeperiod=15)
 	# plt.plot(data_EMA[:100])
 	# plt.boxplot(np.array(data_EMA))
 
+	data_trader_draw = [0.7200+np.argmax(np.array(x))*0.0002 for x in data_trader]
+	plt.plot(data_trader_draw[-100:], marker="o")
+	plt.plot(data_EMA[-100:])
+	plt.plot(data_EMAs[-100:])
+	plt.plot(data_close[-100:])
 
 
 	data_WILLR = talib.WILLR(np.array(data_high), np.array(data_low), np.array(data_close), timeperiod=14)
@@ -212,17 +235,20 @@ def read_data(source_path, max_size=None, test=None):
 
 
 
-	# plt.grid(True)
-	# plt.show()
+	plt.grid(True)
+	plt.show()
 
 
-
+	data_close = np.array(data_close)
 
 	data_set = []
 
 	for i in range(50, len(data_close)-50):
 		item = [
+				data_trader[i],
+				data_close[i],
 				data_EMA[i],
+				data_EMAs[i],
 				data_WILLR[i],
 				data_RSI[i],
 				data_slowk[i],
@@ -432,7 +458,7 @@ def get_batch(data_set):
 		l_index = int(seed+(bucket[0]-1)*BASE_LENGTH/DATA_DIS)
 		r_index = int(seed+(bucket[0])*BASE_LENGTH/DATA_DIS)
 		block = np.array(data_set[ l_index : r_index ])
-		start_price = np.average(block[:,0])
+		start_price = np.average(block[:,2])
 
 
 		for bucket_id in range(sum(bucket)):
@@ -440,24 +466,45 @@ def get_batch(data_set):
 			r_index = int(seed+(bucket_id+1)*BASE_LENGTH/DATA_DIS)
 			block = np.array(data_set[ l_index : r_index ])
 
-			_avr_ema = np.average(block[:,0])
+			# data_trader[i],
+			# data_close[i],
+			# data_EMA[i],
+			# data_EMAs[i],
+			# data_WILLR[i],
+			# data_RSI[i],
+			# data_slowk[i],
+			# data_slowd[i],
+			# data_macd[i],
+			# data_macdsignal[i],
+			# data_macdhist[i]
+
+			_avr_tra = block[-1][0]
+
+
+			_avr_clo = np.average(block[:,1])
+			_avr_clo = number_to_number(_avr_clo, start_price)
+
+			_avr_ema = np.average(block[:,2])
 			_avr_ema = number_to_number(_avr_ema, start_price)
+			_avr_ema_s = np.average(block[:,3])
+			_avr_ema_s = number_to_number(_avr_ema_s, start_price)
 
-			_avr_wil = np.average(block[:,1])
-			_avr_rsi = np.average(block[:,2])
-			_avr_slowk = np.average(block[:,3])
-			_avr_slowd = np.average(block[:,4])
-			_avr_macd = np.average(block[:,5])
-			_avr_macdsignal = np.average(block[:,6])
-			_avr_macdhist = np.average(block[:,7])
+			_avr_wil = np.average(block[:,4])
+			_avr_rsi = np.average(block[:,5])
+			_avr_slowk = np.average(block[:,6])
+			_avr_slowd = np.average(block[:,7])
+			_avr_macd = np.average(block[:,8])
+			_avr_macdsignal = np.average(block[:,9])
+			_avr_macdhist = np.average(block[:,10])
 
 
-
-			_input = [_avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
 
 			if bucket_id < bucket[0]:
+				# _input = [_avr_clo, _avr_ema, _avr_ema_s, _avr_wil, _avr_rsi]
+				_input = [_avr_clo, _avr_ema, _avr_ema_s, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
 				encoder_inputs[bucket_id].append(_input)
 			else:
+				_input = _avr_tra
 				decoder_inputs[bucket_id-bucket[0]].append(_input)
 
 				
@@ -536,8 +583,8 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
 
-			p_out = p_out[:,:,0]
-			t_out = t_out[:,:,0]
+			# p_out = p_out[:,:,0]
+			# t_out = t_out[:,:,0]
 
 			# label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
 			# label_target = ( np.array(t_out) >= 0.5 ).astype(int)
@@ -545,16 +592,28 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			# results = np.equal(label_predict,label_target)
 			# results = np.sum(results, axis=2)
 			# results = (results == model.output_size).astype(int)
+			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+
+			# print (np.array(p_out).shape)
+			# print (np.array(t_out).shape)
+
+			label_predict = np.argmax(np.array(p_out), axis=2)
+			label_target = np.argmax(np.array(t_out), axis=2)
+
+			results = np.equal(label_predict,label_target).astype(int)			
+			true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+
+
 			
-			results = ( np.array(p_out)-np.array(t_out) < 2.0/NUMBER_SPLIT ).astype(int)
+			# results = ( np.array(p_out)-np.array(t_out) < 2.0/NUMBER_SPLIT ).astype(int)
 
 
-			true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size*model.output_size)
+			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size*model.output_size)
 
 			accuracy += true_accuracy / FLAGS.steps_per_checkpoint
 
-			_error = np.average(np.absolute(np.array(p_out) - np.array(t_out)))
-			error += _error / FLAGS.steps_per_checkpoint
+			# _error = np.average(np.absolute(np.array(p_out) - np.array(t_out)))
+			# error += _error / FLAGS.steps_per_checkpoint
 			current_step += 1
 
 			# Once in a while, we save checkpoint, print statistics, and run evals.
@@ -585,7 +644,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 					)
 				print("LOSS",loss)
 				print("ACCU",accuracy)
-				print("ERRO",error)
+				# print("ERRO",error)
 				# Decrease learning rate if no improvement was seen over last 3 times.
 				if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
 					sess.run(model.learning_rate_decay_op)
@@ -829,7 +888,7 @@ def self_test():
 		# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
 		model = create_model(sess, True)
 
-		model.batch_size = 10
+		model.batch_size = FLAGS.batch_size
 
 		test_set = read_data(SOURCE_PATH+TEST_CSV_NAME)
 
@@ -893,111 +952,44 @@ def self_test():
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
 
-			p_out = p_out[:,:,0]
-			t_out = t_out[:,:,0]
-
-			# # Error calculate
-			# p_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
-			# t_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
-			# for step in range(bucket[1]-1):
-			# 	for batch_number in range(model.batch_size):
-			# 		p_price[step][batch_number] = output_to_number(p_out[step][batch_number])
-			# 		t_price[step][batch_number] = output_to_number(t_out[step][batch_number])
-			# # print(np.array(p_price).shape)
-			# # print(np.array(t_price).shape)
-
-			# error_price = np.absolute(np.array(p_price)-np.array(t_price))
-
-			p_out_real = 2.0*np.array(p_out)-1.0
-			t_out_real = 2.0*np.array(t_out)-1.0
-
-			p_out_real[p_out_real > 0.999] = 0.999
-			p_out_real[p_out_real < -0.999] = -0.999
-			t_out_real[t_out_real > 0.999] = 0.999
-			t_out_real[t_out_real < -0.999] = -0.999
-
-			p_out_real = np.arctanh( p_out_real ) / COMPRESS
-			t_out_real = np.arctanh( t_out_real ) / COMPRESS
-
-			error_price = np.absolute(p_out_real-t_out_real)
-
-			# error_price = np.absolute(np.array(p_out)-np.array(t_out))
-			error_price = np.average(error_price, axis=1)
-			# error_price = np.average(error_price, axis=1)
-
-			# print(p_price[-1][0])
-
-			# print(np.array(t_price).shape)
-
-			final_error_collect[seed_wheel].append(error_price)
-
-
-
-			error_dis = np.sqrt(np.power(p_out_real-t_out_real, 2))
-
-			# error_dis = np.sqrt(np.power(np.array(p_out)-np.array(t_out), 2))
-			error_dis = np.average(error_dis, axis=1)
-			# error_dis = np.average(error_dis, axis=1)
-
-			final_error_dis_collect[seed_wheel].append(error_dis)
-
-
-			# start_bid_price = test_set[seed][0]
-			# start_ask_price = test_set[seed][int(SECOND_VOLUME/2)]
-
-			# output_to_number(output)
-
 
 			
 			# Accuracy calculate
 
-			# label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			# label_target = np.array(t_out)
-
-			# results = np.equal(label_predict,label_target)
+			label_predict = np.argmax(np.array(p_out), axis=2)
+			label_target = np.argmax(np.array(t_out), axis=2)
 
 
-			results = (np.absolute(p_out_real-t_out_real) < 0.03).astype(int)
+			normal_pre = (label_predict != 2)
+			label_predict = np.extract(normal_pre, label_predict)
+			label_target = np.extract(normal_pre, label_target)
+
+			# print(np.sum((label_predict==2).astype(int)))
+			# print(np.sum((label_target==2).astype(int)))
+
+			# print (label_predict.shape)
+			# print (label_target.shape)
+
+			results = np.equal(label_predict,label_target).astype(int)
+
+			# print(results)
 
 
-			# results = np.sum(results, axis=2)
-			# results = (results == model.output_size).astype(int)
-
-			# print (np.sum(results, axis=1)/float(model.batch_size))
-			# print (results.shape)
-
-			true_accuracy = np.sum(results, axis=1)/float(model.batch_size)
-
-			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+			true_accuracy = float(np.sum(results))/float(model.batch_size)
 
 
-			true_accuracy = float(np.sum(results)) / float(results.size)
 			final_accu_collect[seed_wheel].append(true_accuracy)
-			# accuracy += true_accuracy / FLAGS.steps_per_checkpoint
 
 
 
-			# break
+			break
 
 			epo_counter+=1
+			# print (epo_counter)
 			
 
-		final_error = []
-		for x in final_error_collect:
-			if len(x) == 0:
-				final_error.append([0.0 for _ in range(bucket[1]-1)])
-			else:
-				x = np.array(x)
-				err = np.average(x, axis=0)
-				final_error.append(err)
-		final_error_dis = []
-		for x in final_error_dis_collect:
-			if len(x) == 0:
-				final_error_dis.append([0.0 for _ in range(bucket[1]-1)])
-			else:
-				x = np.array(x)
-				err = np.average(x, axis=0)
-				final_error_dis.append(err)
+
+
 
 		final_accu = []
 		for x in final_accu_collect:
@@ -1005,6 +997,7 @@ def self_test():
 				final_accu.append([0.0 for _ in range(bucket[1]-1)])
 			else:
 				x = np.array(x)
+				# print (x)
 				accu = np.average(x, axis=0)
 				final_accu.append(accu)
 
@@ -1017,106 +1010,10 @@ def self_test():
 		ACCU = [ np.average(np.array(x)) for x in final_accu]
 		print (np.average(np.array(ACCU)))
 
-		print ("=====SUB   ERRO=====")
-		for x in range(len(final_error)):
-			print ("#",x,"#",final_error[x])
-
-		print ("=====FINAL ERRO=====")
-		ERRO = [ np.average(np.array(x)) for x in final_error]
-		print (np.average(np.array(ERRO)))
-
-		print ("=====SUB   DIST=====")
-		for x in range(len(final_error_dis)):
-			print ("#",x,"#",final_error_dis[x])
-
-		print ("=====FINAL DIST=====")
-		ERRO = [ np.average(np.array(x)) for x in final_error_dis]
-		print (np.average(np.array(ERRO)))
-
-
-def model_test():
-	"""Test the s2s model."""
-	with tf.Session() as sess:
-		print("Model-test for s2s model.")
-	# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
-	model = seq2seq_model.Seq2SeqModel(input_size=5, output_size=5, buckets=[(3, 3)], size=200, num_layers=2, max_gradient_norm=5.0, batch_size=2, learning_rate=0.5, learning_rate_decay_factor=0.9, num_samples=8)
-
-	sess.run(tf.initialize_all_variables())
-
-	# Fake data set for both the (3, 3) bucket.
-	data_set = [[]]
-	for _ in range(50):
-		batch_input = []
-		batch_output = []
-		for __ in range(model.buckets[0][0]):
-			item = [0.0 for _ in range(model.input_size)]
-			for _ in range(1):
-				item[random.randint(0, model.input_size-1)] = 1.0
-			batch_input.append(item)
-		for __ in range(model.buckets[0][1]):
-			item = [0.0 for _ in range(model.input_size)]
-			for _ in range(1):
-				item[random.randint(0, model.input_size-1)] = 1.0
-			batch_output.append(item)
-		one_batch = [batch_input, batch_output]
-		data_set[0].append(one_batch)
-	# data_set = [[
-	# 		[
-	# 			[[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]],
-	# 			[[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]]
-	# 		],
-	# 		[
-	# 			[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]],
-	# 			[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]]
-	# 		]
-	# 	]]
-	for _ in xrange(5001):  # Train the fake model for 5 steps.
-		bucket_id = 0
-
-		encoder_inputs, decoder_inputs, target_weights = model.get_batch(data_set, bucket_id)
-
-		# print( np.array(encoder_inputs).shape )
-		# print( np.array(decoder_inputs).shape )
-		# print( np.array(target_weights).shape )
-
-		stepout = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, False)
-
-		if _ % 500 == 0:
-			print("@@@@@@@@@@@@@@",_)
-			p_out = np.array(stepout[2])
-			t_out = np.array(decoder_inputs)
-			# print(p_out[0][0][:5])
-			# print(t_out[0][0][:5])
-			error = np.average(np.absolute(t_out-p_out))
-			print("LOSS",stepout[1])
-
-
-
-			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = np.array(t_out)
-			print(np.array(label_predict).shape)
-			print(np.array(label_target).shape)
-
-
-			results = np.equal(label_predict,label_target)
-			# print results
-			results = np.sum(results, axis=2)
-			print(results)
-			results = (results == model.output_size).astype(int)
-			# print results
-			# print np.array(results).shape
-			print("True Number",np.sum(results),"/", model.buckets[bucket_id][1]*model.batch_size)
 
 
 
 
-def main(_):
-	if FLAGS.self_test:
-		self_test()
-	elif FLAGS.decode:
-		decode()
-	else:
-		train()
 
 
 if __name__ == "__main__":
