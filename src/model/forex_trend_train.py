@@ -24,17 +24,19 @@ from tensorflow.python.ops import variable_scope
 
 
 import matplotlib.pyplot as plt
+from matplotlib.finance import candlestick
+from matplotlib.dates import num2date
 
 import talib
 
 
 # from common import config
 if __name__ == "__main__":
-
-	import seq2seq as seq2seq_model
+	import rnn_memory_classify as seq2seq_model
 	# from IAS import tf_seq2seq_one2one as seq2seq_model
 	# from IAS import word2vec, word_segmentation
-	import time_align, norm
+	import time_align, norm, trade_points
+
 
 	if len(sys.argv) < 2:
 		raise ValueError("Please enter the action [train, test]")
@@ -57,15 +59,16 @@ if __name__ == "__main__":
 			raise ValueError("Please enter the model name")
 		else:
 			SAVE_NAME = sys.argv[2]
+
+
+	SOURCE_PATH = "src/data/forex/"
+
 else:
-	from src.model import seq2seq as seq2seq_model
-	from src.model import time_align, norm
+
+	from src.model import rnn_memory_classify as seq2seq_model
+	from src.model import time_align, norm, trade_points
 
 	SAVE_NAME = "relase"
-
-
-SOURCE_PATH = "src/data/forex/"
-
 
 
 
@@ -94,41 +97,58 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (30, 2)
+_buckets = (300, 2)
 bucket = _buckets
 
-tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
+FLAGS = {
+	"export_version": 0.05,
+	"learning_rate": 0.1,
+	"learning_rate_decay_factor": 0.99,
+	"max_gradient_norm": 5.0,
+	"batch_size": 20,
+	"size": 100,
+	"num_layers": 2,
+	"source_vocab_size": 1,
+	"target_vocab_size": 2,
+	"train_dir": "src/model/forex_trend/"+SAVE_NAME,
+	"max_train_data_size": 0,
+	"steps_per_checkpoint": 3000,
+	"decode": False,
+	"self_test": False
+}
+
+# tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
 
-tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
-tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
+# tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
+# tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
 
-tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
+# tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
-# tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("batch_size", 20, "Batch size to use during training.")
+# # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
+# tf.app.flags.DEFINE_integer("batch_size", 20, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 50, "Size of each model layer.")
+# tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 
-tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
-# tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
-# tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 10, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 10, "French vocabulary size.")
+# tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
+# # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
+# # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
+# tf.app.flags.DEFINE_integer("source_vocab_size", 10, "English vocabulary size.")
+# tf.app.flags.DEFINE_integer("target_vocab_size", 2, "French vocabulary size.")
 
-tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
-tf.app.flags.DEFINE_string("train_dir", "src/model/forex/"+SAVE_NAME, "Training directory.")
+# tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
+# tf.app.flags.DEFINE_string("train_dir", "src/model/forex_trader/"+SAVE_NAME, "Training directory.")
 
-tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
+# tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 8800, "How many training steps to do per checkpoint.")
+# # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 8800, "How many training steps to do per checkpoint.")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 3000, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 3000, "How many training steps to do per checkpoint.")
 
-tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
-tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
+# tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
+# tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
 
-FLAGS = tf.app.flags.FLAGS
+# # FLAGS = tf.app.flags.FLAGS
 
 
 
@@ -160,8 +180,8 @@ def read_data(source_path, max_size=None, test=None):
 
 	# data_set = [[] for _ in _buckets]
 
-	# file_obj = open(source_path)
-	# reader = csv.reader(file_obj)
+	file_obj = open(source_path)
+	reader = csv.reader(file_obj)
 
 	counter = 0
 
@@ -170,24 +190,85 @@ def read_data(source_path, max_size=None, test=None):
 
  	
 	# data_align_set = time_align.load(source_path)
-	file_obj = open(source_path)
-	reader = csv.reader(file_obj)
-	data_align_set = [x for x in reader]
+
+	# data_set = trade_points.load(source_path)
+	data_set = []
+	prev_item = False
+	for item in reader:
+		_trend = [0,0]
+		if not prev_item:
+			prev_item = item
+		_close = float(item[2])
+		_prev_close = float(prev_item[2])
+		if _close > _prev_close:
+			_trend = [1,0]
+		else:
+			_trend = [0,1]
+
+		data_set.append(item+[_trend])
+
+		prev_item = item
+
+		# print (item+[_trend])
+
+
+
+
 
 
 	# talib转化
-	data_close = [ float(x[2]) for x in data_align_set ]
-	data_high = [ float(x[3]) for x in data_align_set ]
-	data_low = [ float(x[4]) for x in data_align_set ]
+	data_close = [ float(x[2]) for x in data_set ]
+	data_high = [ float(x[3]) for x in data_set ]
+	data_low = [ float(x[4]) for x in data_set ]
+	data_trader = [ x[6] for x in data_set ]
+
+
+
 
 	# ax=plt.gca()
+	# candlestick(ax, data_candle, width=1, colorup='g', colordown='r')
+
+
+
+
+	# print(data_trader[:100])
+
 
 
 	data_EMA = talib.EMA(np.array(data_close), timeperiod=30)
-	data_EMAs = talib.EMA(np.array(data_close), timeperiod=5)
+	data_EMAs = talib.EMA(np.array(data_close), timeperiod=15)
 	# plt.plot(data_EMA[:100])
-	# plt.boxplot(np.array(data_EMAs))
+	# plt.boxplot(np.array(data_EMA))
 
+
+
+	data_trader = []
+	prev_item = False
+	for item in data_EMAs:
+		_trend = [0,0]
+		if not prev_item:
+			prev_item = item
+		_close = item
+		_prev_close = prev_item
+		if _close > _prev_close:
+			_trend = [1,0]
+		else:
+			_trend = [0,1]
+
+		data_trader.append(_trend)
+
+		prev_item = item
+	# print (data_trader)
+
+	data_trader = np.array(data_trader)
+
+
+
+	data_trader_draw = [0.7200+np.argmax(np.array(x))*0.0002 for x in data_trader]
+	# plt.plot(data_trader_draw[-100:], marker="o")
+	# plt.plot(data_EMA[-100:])
+	# plt.plot(data_EMAs[-100:])
+	# plt.plot(data_close[-100:])
 
 
 	data_WILLR = talib.WILLR(np.array(data_high), np.array(data_low), np.array(data_close), timeperiod=14)
@@ -222,21 +303,58 @@ def read_data(source_path, max_size=None, test=None):
 	# plt.boxplot(data_macdhist)
 
 
-	data_upperband, data_middleband, data_lowerband = talib.BBANDS(np.array(data_close), timeperiod=5, nbdevup=2, nbdevdn=2, matype=0)
+
+
+	data_close = np.array(data_close)
+
+
+	data_close_list = []
+	prev_item = False
+	for item in data_close:
+		if not prev_item:
+			prev_item = item
+		_close = item
+		_prev_close = prev_item
+
+		returns = _close/_prev_close
+
+		data_close_list.append(returns)
+
+		prev_item = item
 
 
 
-	data_higher = np.array(data_high) - np.array(data_EMAs)
-	data_higher = talib.EMA(data_higher, timeperiod=5)
+	data_trader = []
+	for item in data_close_list:
+		_trend = [0,0]
+		if item > 1.0:
+			_trend = [1,0]
+		else:
+			_trend = [0,1]
+		data_trader.append(_trend)
 
-	data_lower = np.array(data_low) - np.array(data_EMAs)
-	data_lower = talib.EMA(data_lower, timeperiod=5)
+		prev_item = item
+	data_trader = np.array(data_trader)
+
+	# print (data_trader[0:100])
 
 
+
+
+	data_close = np.array(data_close_list)
+
+	data_close = np.log(data_close)
+
+	data_close_mean = np.mean(data_close)
+	data_close_std = np.std(data_close)
+
+	data_close = 1.0 / ( 1.0 + np.exp( (data_close - data_close_mean) / data_close_std ) )
+
+
+	# plt.boxplot(np.array(data_close_list))
 
 	# plt.grid(True)
 	# plt.show()
-
 
 
 
@@ -244,21 +362,17 @@ def read_data(source_path, max_size=None, test=None):
 
 	for i in range(50, len(data_close)-50):
 		item = [
-				# data_close[i],
-				data_EMAs[i],
+				data_trader[i],
+				data_close[i],
 				data_EMA[i],
+				data_EMAs[i],
 				data_WILLR[i],
 				data_RSI[i],
 				data_slowk[i],
 				data_slowd[i],
 				data_macd[i],
 				data_macdsignal[i],
-				data_macdhist[i],
-				data_upperband[i],
-				data_middleband[i],
-				data_lowerband[i],
-				data_higher[i],
-				data_lower[i]
+				data_macdhist[i]
 			]
 		data_set.append(item)
 
@@ -314,14 +428,14 @@ def read_data(source_path, max_size=None, test=None):
 
 
 
-def create_model(session, forward_only, batch_size = FLAGS.batch_size, model_name = SAVE_NAME):
+def create_model(session, forward_only, batch_size=FLAGS["batch_size"], model_name = SAVE_NAME):
 	"""Create translation model and initialize or load parameters in session."""
 	model = seq2seq_model.Seq2SeqModel(
-			FLAGS.source_vocab_size, FLAGS.target_vocab_size, _buckets,
-			FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, batch_size,
-			FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
+			FLAGS["source_vocab_size"], FLAGS["target_vocab_size"], _buckets,
+			FLAGS["size"], FLAGS["num_layers"], FLAGS["max_gradient_norm"], batch_size,
+			FLAGS["learning_rate"], FLAGS["learning_rate_decay_factor"],
 			forward_only=forward_only)
-	ckpt = tf.train.get_checkpoint_state("src/model/forex/"+model_name)
+	ckpt = tf.train.get_checkpoint_state("src/model/forex_trader/"+model_name)
 	if ckpt:
 	# if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
 		print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
@@ -330,7 +444,7 @@ def create_model(session, forward_only, batch_size = FLAGS.batch_size, model_nam
 		if not forward_only:
 			# set new learning rate
 			print("Old Learning Rate: ",model.learning_rate.eval(session=session))
-			new_learning_rate = tf.Variable(float(FLAGS.learning_rate), trainable=False)
+			new_learning_rate = tf.Variable(float(FLAGS["learning_rate"]), trainable=False)
 			op = tf.assign(model.learning_rate, new_learning_rate)
 			op_init = tf.initialize_variables([new_learning_rate])
 			session.run([op_init])
@@ -455,14 +569,13 @@ def get_batch(data_set):
 	decoder_inputs = [ [] for x in range(bucket[1]) ]
 
 
-	for x in range(FLAGS.batch_size):
+	for x in range(FLAGS["batch_size"]):
 		seed = random.randint(0, data_set_size-1-((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS))
 
 		l_index = int(seed+(bucket[0]-1)*BASE_LENGTH/DATA_DIS)
 		r_index = int(seed+(bucket[0])*BASE_LENGTH/DATA_DIS)
 		block = np.array(data_set[ l_index : r_index ])
-		start_price_s = np.average(block[:,0])
-		start_price = np.average(block[:,1])
+		start_price = np.average(block[:,2])
 
 
 		for bucket_id in range(sum(bucket)):
@@ -470,41 +583,45 @@ def get_batch(data_set):
 			r_index = int(seed+(bucket_id+1)*BASE_LENGTH/DATA_DIS)
 			block = np.array(data_set[ l_index : r_index ])
 
-			_avr_emas = np.average(block[:,0])
-			_avr_emas = number_to_number(_avr_emas, start_price_s)
-			_avr_ema = np.average(block[:,1])
+			# data_trader[i],
+			# data_close[i],
+			# data_EMA[i],
+			# data_EMAs[i],
+			# data_WILLR[i],
+			# data_RSI[i],
+			# data_slowk[i],
+			# data_slowd[i],
+			# data_macd[i],
+			# data_macdsignal[i],
+			# data_macdhist[i]
+
+			_avr_tra = block[-1][0]
+
+
+			_avr_clo = np.average(block[:,1])
+			# _avr_clo = number_to_number(_avr_clo, start_price)
+
+			_avr_ema = np.average(block[:,2])
 			_avr_ema = number_to_number(_avr_ema, start_price)
+			_avr_ema_s = np.average(block[:,3])
+			_avr_ema_s = number_to_number(_avr_ema_s, start_price)
 
-			_avr_wil = np.average(block[:,2])
-			_avr_rsi = np.average(block[:,3])
-			_avr_slowk = np.average(block[:,4])
-			_avr_slowd = np.average(block[:,5])
-			_avr_macd = np.average(block[:,6])
-			_avr_macdsignal = np.average(block[:,7])
-			_avr_macdhist = np.average(block[:,8])
-
-
-			_avr_upperband = np.average(block[:,9])
-			_avr_upperband = number_to_number(_avr_upperband, start_price_s)
-			_avr_middleband = np.average(block[:,10])
-			_avr_middleband = number_to_number(_avr_middleband, start_price_s)
-			_avr_lowerband = np.average(block[:,11])
-			_avr_lowerband = number_to_number(_avr_lowerband, start_price_s)
+			_avr_wil = np.average(block[:,4])
+			_avr_rsi = np.average(block[:,5])
+			_avr_slowk = np.average(block[:,6])
+			_avr_slowd = np.average(block[:,7])
+			_avr_macd = np.average(block[:,8])
+			_avr_macdsignal = np.average(block[:,9])
+			_avr_macdhist = np.average(block[:,10])
 
 
-			_avr_higher = np.average(block[:,12])
-			_avr_higher = number_to_number(_avr_higher, start_price_s)
-			_avr_lower = np.average(block[:,13])
-			_avr_lower = number_to_number(_avr_lower, start_price_s)
-
-
-
-			_input = [_avr_emas, _avr_higher, _avr_lower, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
-			# _input = [_avr_emas, _avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
 
 			if bucket_id < bucket[0]:
+				_input = [_avr_clo]
+				# _input = [_avr_clo, _avr_ema, _avr_ema_s, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
 				encoder_inputs[bucket_id].append(_input)
 			else:
+				_input = _avr_tra
 				decoder_inputs[bucket_id-bucket[0]].append(_input)
 
 				
@@ -514,7 +631,7 @@ def get_batch(data_set):
 	decoder_inputs = decoder_inputs[:-1]
 	# print( np.array(decoder_inputs).shape )
 	# add GO symble
-	GO = [[[0.0 for x in range(FLAGS.target_vocab_size)] for x in range(FLAGS.batch_size)]]
+	GO = [[[0.0 for x in range(FLAGS["target_vocab_size"])] for x in range(FLAGS["batch_size"])]]
 	# print( np.array(GO).shape )
 	decoder_inputs =  GO + decoder_inputs
 
@@ -536,7 +653,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 
 	with tf.Session() as sess:
 		# Create model.
-		print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
+		print("Creating %d layers of %d units." % (FLAGS["num_layers"], FLAGS["size"]))
 		model = create_model(sess, False)
 
 		# Read data into buckets and compute their sizes.
@@ -569,9 +686,9 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			# print("Gradient norm",stepout[0])
 			# print("step_loss",stepout[1])
 			# print ("-----STEP TIME",time.time()-start_time)
-			step_time += (time.time() - start_time) / FLAGS.steps_per_checkpoint
+			step_time += (time.time() - start_time) / FLAGS["steps_per_checkpoint"]
 			step_time_mini += (time.time() - start_time) / 10.0
-			loss += np.average(stepout[1]) / FLAGS.steps_per_checkpoint
+			loss += np.average(stepout[1]) / FLAGS["steps_per_checkpoint"]
 
 
 
@@ -583,26 +700,37 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
 
-			p_out = p_out[:,:,0:1]
-			t_out = t_out[:,:,0:1]
+			# p_out = p_out[:,:,0]
+			# t_out = t_out[:,:,0]
 
-			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = ( np.array(t_out) >= 0.5 ).astype(int)
+			# label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
+			# label_target = ( np.array(t_out) >= 0.5 ).astype(int)
 
-			results = np.equal(label_predict,label_target)
+			# results = np.equal(label_predict,label_target)
 			# results = np.sum(results, axis=2)
 			# results = (results == model.output_size).astype(int)
+			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+
+			# print (np.array(p_out).shape)
+			# print (np.array(t_out).shape)
+
+			label_predict = np.argmax(np.array(p_out), axis=2)
+			label_target = np.argmax(np.array(t_out), axis=2)
+
+			results = np.equal(label_predict,label_target).astype(int)			
+			true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+
+
 			
 			# results = ( np.array(p_out)-np.array(t_out) < 2.0/NUMBER_SPLIT ).astype(int)
 
 
-			true_accuracy = float(np.sum(results))/float(results.size)
 			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size*model.output_size)
 
-			accuracy += true_accuracy / FLAGS.steps_per_checkpoint
+			accuracy += true_accuracy / FLAGS["steps_per_checkpoint"]
 
-			_error = np.average(np.absolute(np.array(p_out) - np.array(t_out)))
-			error += _error / FLAGS.steps_per_checkpoint
+			# _error = np.average(np.absolute(np.array(p_out) - np.array(t_out)))
+			# error += _error / FLAGS["steps_per_checkpoint"]
 			current_step += 1
 
 			# Once in a while, we save checkpoint, print statistics, and run evals.
@@ -612,7 +740,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			# if current_step % 10 == 0:
 			# 	# print ("#########STEP TIME",step_time_mini)
 			# 	step_time_mini = 0.0
-			if current_step % FLAGS.steps_per_checkpoint == 0:	
+			if current_step % FLAGS["steps_per_checkpoint"] == 0:	
 
 				# print(p_out)
 				# print(t_out)
@@ -633,13 +761,13 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 					)
 				print("LOSS",loss)
 				print("ACCU",accuracy)
-				print("ERRO",error)
+				# print("ERRO",error)
 				# Decrease learning rate if no improvement was seen over last 3 times.
 				if len(previous_losses) > 2 and loss > max(previous_losses[-3:]):
 					sess.run(model.learning_rate_decay_op)
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
-				checkpoint_path = os.path.join(FLAGS.train_dir, "forex.ckpt")
+				checkpoint_path = os.path.join(FLAGS["train_dir"], "forex.ckpt")
 				if IFSAVE:
 					model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
@@ -706,8 +834,6 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 				VOLUME_differ = []
 
 
-
-
 class decoder():
 
 	# 初始化
@@ -718,7 +844,7 @@ class decoder():
 		self.sess = sess
 
 	# 预测
-	def decode(self, data_EMAs, data_higher, data_lower, data_EMA, data_WILLR, data_RSI, data_slowk, data_slowd, data_macd, data_macdsignal, data_macdhist):
+	def decode(self, data_close, data_EMAs, data_EMA, data_WILLR, data_RSI, data_slowk, data_slowd, data_macd, data_macdsignal, data_macdhist):
 		if len(data_EMA) < bucket[0]+33:
 			print("长度不符合")
 			return False
@@ -730,7 +856,8 @@ class decoder():
 		base_point = -bucket[0]
 		for bucket_id in range(bucket[0]):
 
-			_avr_emas = number_to_number(data_EMAs[base_point+bucket_id], start_price_s)
+			_avr_clo = number_to_number(data_close[base_point+bucket_id], start_price)
+			_avr_emas = number_to_number(data_EMAs[base_point+bucket_id], start_price)
 			_avr_ema = number_to_number(data_EMA[base_point+bucket_id], start_price)
 			_avr_wil = data_WILLR[base_point+bucket_id]
 			_avr_rsi = data_RSI[base_point+bucket_id]
@@ -739,30 +866,25 @@ class decoder():
 			_avr_macd = data_macd[base_point+bucket_id]
 			_avr_macdsignal = data_macdsignal[base_point+bucket_id]
 			_avr_macdhist = data_macdhist[base_point+bucket_id]
-			_avr_higher = data_higher[base_point+bucket_id]
-			_avr_lower = data_lower[base_point+bucket_id]
 
 
-			_input = [_avr_emas, _avr_higher, _avr_lower, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
-			# _input = [_avr_emas, _avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
+			_input = [_avr_clo, _avr_ema, _avr_emas, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
 
 			encoder_inputs[bucket_id].append(_input)
 		
 		decoder_inputs[bucket_id-bucket[0]].append(_input)
 
-		zeros = [[0.0 for x in range(FLAGS.target_vocab_size)] for x in range(1)]
+		zeros = [[0.0 for x in range(FLAGS["target_vocab_size"])] for x in range(1)]
 		decoder_inputs =  [zeros for _ in range(bucket[1])]
+
+		# print (np.array(decoder_inputs).shape)
 
 		stepout = self.model.step(self.sess, encoder_inputs, decoder_inputs, True)
 
 		return stepout[2][:-1]
 
-
 	def close(self):
 		self.sess.close()
-		print ("CLOSED")
-
-	
 
 
 def self_test():
@@ -772,7 +894,7 @@ def self_test():
 		# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
 		model = create_model(sess, True)
 
-		model.batch_size = 10
+		model.batch_size = FLAGS["batch_size"]
 
 		test_set = read_data(SOURCE_PATH+TEST_CSV_NAME)
 
@@ -786,7 +908,7 @@ def self_test():
 		final_error_collect = [ [] for x in range(wheel_part_number) ]
 		final_error_dis_collect = [ [] for x in range(wheel_part_number) ]
 
-		epo = 10.0*wheel_part_number
+		epo = 100.0*wheel_part_number
 		epo_counter = 0
 		while epo_counter <= epo:
 			seed_wheel = random.randint(0, wheel_part_number-1)
@@ -836,116 +958,48 @@ def self_test():
 			p_out = p_out[:-1]
 			t_out = t_out[1:]
 
-			p_out = p_out[:,:, 0]
-			t_out = t_out[:,:, 0]
-
-			# # Error calculate
-			# p_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
-			# t_price = [ [ [] for y in range(model.batch_size) ] for x in range(bucket[1]-1)]
-			# for step in range(bucket[1]-1):
-			# 	for batch_number in range(model.batch_size):
-			# 		p_price[step][batch_number] = output_to_number(p_out[step][batch_number])
-			# 		t_price[step][batch_number] = output_to_number(t_out[step][batch_number])
-			# # print(np.array(p_price).shape)
-			# # print(np.array(t_price).shape)
-
-			# error_price = np.absolute(np.array(p_price)-np.array(t_price))
-
-			p_out_real = 2.0*np.array(p_out)-1.0
-			t_out_real = 2.0*np.array(t_out)-1.0
-
-			p_out_real[p_out_real > 0.999] = 0.999
-			p_out_real[p_out_real < -0.999] = -0.999
-			t_out_real[t_out_real > 0.999] = 0.999
-			t_out_real[t_out_real < -0.999] = -0.999
-
-			p_out_real = np.arctanh( p_out_real ) / COMPRESS
-			t_out_real = np.arctanh( t_out_real ) / COMPRESS
-
-			error_price = np.absolute(p_out_real-t_out_real)
-
-			# error_price = np.absolute(np.array(p_out)-np.array(t_out))
-			error_price = np.average(error_price, axis=1)
-			# error_price = np.average(error_price, axis=1)
-
-			# print(p_price[-1][0])
-
-			# print(np.array(t_price).shape)
-
-			final_error_collect[seed_wheel].append(error_price)
-
-
-
-			error_dis = np.sqrt(np.power(p_out_real-t_out_real, 2))
-
-			# error_dis = np.sqrt(np.power(np.array(p_out)-np.array(t_out), 2))
-			error_dis = np.average(error_dis, axis=1)
-			# error_dis = np.average(error_dis, axis=1)
-
-			final_error_dis_collect[seed_wheel].append(error_dis)
-
-
-			# start_bid_price = test_set[seed][0]
-			# start_ask_price = test_set[seed][int(SECOND_VOLUME/2)]
-
-			# output_to_number(output)
-
 
 			
 			# Accuracy calculate
 
-			# label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			# label_target = np.array(t_out)
+			label_predict = np.argmax(np.array(p_out), axis=2)
+			label_target = np.argmax(np.array(t_out), axis=2)
+
+
+			normal_pre = (label_predict != 2)
+			label_predict = np.extract(normal_pre, label_predict)
+			label_target = np.extract(normal_pre, label_target)
 
 
 
-			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = ( np.array(t_out) >= 0.5 ).astype(int)
+			# print(np.sum((label_predict==2).astype(int)))
+			# print(np.sum((label_target==2).astype(int)))
 
-			results = np.equal(label_predict,label_target)
+			# print (label_predict.shape)
+			# print (label_target.shape)
 
+			results = np.equal(label_predict,label_target).astype(int)
 
-			# results = (np.absolute(p_out_real-t_out_real) < 0.03).astype(int)
+			# print(results)
 
-
-			# results = np.sum(results, axis=2)
-			# results = (results == model.output_size).astype(int)
-
-			# print (np.sum(results, axis=1)/float(model.batch_size))
-			# print (results.shape)
-
-			# true_accuracy = np.sum(results, axis=1)/float(model.batch_size)
-
-			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size)
+			if results.size == 0:
+				continue
+			else:
+				true_accuracy = float(np.sum(results))/float(results.size)
 
 
-			true_accuracy = float(np.sum(results)) / float(results.size)
 			final_accu_collect[seed_wheel].append(true_accuracy)
-			# accuracy += true_accuracy / FLAGS.steps_per_checkpoint
 
 
 
 			# break
 
 			epo_counter+=1
+			# print (epo_counter)
 			
 
-		final_error = []
-		for x in final_error_collect:
-			if len(x) == 0:
-				final_error.append([0.0 for _ in range(bucket[1]-1)])
-			else:
-				x = np.array(x)
-				err = np.average(x, axis=0)
-				final_error.append(err)
-		final_error_dis = []
-		for x in final_error_dis_collect:
-			if len(x) == 0:
-				final_error_dis.append([0.0 for _ in range(bucket[1]-1)])
-			else:
-				x = np.array(x)
-				err = np.average(x, axis=0)
-				final_error_dis.append(err)
+
+
 
 		final_accu = []
 		for x in final_accu_collect:
@@ -953,6 +1007,7 @@ def self_test():
 				final_accu.append([0.0 for _ in range(bucket[1]-1)])
 			else:
 				x = np.array(x)
+				# print (x)
 				accu = np.average(x, axis=0)
 				final_accu.append(accu)
 
@@ -965,106 +1020,10 @@ def self_test():
 		ACCU = [ np.average(np.array(x)) for x in final_accu]
 		print (np.average(np.array(ACCU)))
 
-		print ("=====SUB   ERRO=====")
-		for x in range(len(final_error)):
-			print ("#",x,"#",final_error[x])
-
-		print ("=====FINAL ERRO=====")
-		ERRO = [ np.average(np.array(x)) for x in final_error]
-		print (np.average(np.array(ERRO)))
-
-		# print ("=====SUB   DIST=====")
-		# for x in range(len(final_error_dis)):
-		# 	print ("#",x,"#",final_error_dis[x])
-
-		# print ("=====FINAL DIST=====")
-		# ERRO = [ np.average(np.array(x)) for x in final_error_dis]
-		# print (np.average(np.array(ERRO)))
-
-
-def model_test():
-	"""Test the s2s model."""
-	with tf.Session() as sess:
-		print("Model-test for s2s model.")
-	# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
-	model = seq2seq_model.Seq2SeqModel(input_size=5, output_size=5, buckets=[(3, 3)], size=200, num_layers=2, max_gradient_norm=5.0, batch_size=2, learning_rate=0.5, learning_rate_decay_factor=0.9, num_samples=8)
-
-	sess.run(tf.initialize_all_variables())
-
-	# Fake data set for both the (3, 3) bucket.
-	data_set = [[]]
-	for _ in range(50):
-		batch_input = []
-		batch_output = []
-		for __ in range(model.buckets[0][0]):
-			item = [0.0 for _ in range(model.input_size)]
-			for _ in range(1):
-				item[random.randint(0, model.input_size-1)] = 1.0
-			batch_input.append(item)
-		for __ in range(model.buckets[0][1]):
-			item = [0.0 for _ in range(model.input_size)]
-			for _ in range(1):
-				item[random.randint(0, model.input_size-1)] = 1.0
-			batch_output.append(item)
-		one_batch = [batch_input, batch_output]
-		data_set[0].append(one_batch)
-	# data_set = [[
-	# 		[
-	# 			[[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]],
-	# 			[[0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5], [0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]]
-	# 		],
-	# 		[
-	# 			[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]],
-	# 			[[1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]]
-	# 		]
-	# 	]]
-	for _ in xrange(5001):  # Train the fake model for 5 steps.
-		bucket_id = 0
-
-		encoder_inputs, decoder_inputs, target_weights = model.get_batch(data_set, bucket_id)
-
-		# print( np.array(encoder_inputs).shape )
-		# print( np.array(decoder_inputs).shape )
-		# print( np.array(target_weights).shape )
-
-		stepout = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, False)
-
-		if _ % 500 == 0:
-			print("@@@@@@@@@@@@@@",_)
-			p_out = np.array(stepout[2])
-			t_out = np.array(decoder_inputs)
-			# print(p_out[0][0][:5])
-			# print(t_out[0][0][:5])
-			error = np.average(np.absolute(t_out-p_out))
-			print("LOSS",stepout[1])
-
-
-
-			label_predict = ( np.array(p_out) >= 0.5 ).astype(int)
-			label_target = np.array(t_out)
-			print(np.array(label_predict).shape)
-			print(np.array(label_target).shape)
-
-
-			results = np.equal(label_predict,label_target)
-			# print results
-			results = np.sum(results, axis=2)
-			print(results)
-			results = (results == model.output_size).astype(int)
-			# print results
-			# print np.array(results).shape
-			print("True Number",np.sum(results),"/", model.buckets[bucket_id][1]*model.batch_size)
 
 
 
 
-def main(_):
-	if FLAGS.self_test:
-		self_test()
-	elif FLAGS.decode:
-		decode()
-	else:
-		train()
 
 
 if __name__ == "__main__":

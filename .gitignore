@@ -14,5 +14,6 @@
 src/data/forex/*
 src/model/forex/*
 src/model/forex_trader/*
+src/model/forex_trend/*
 
 common/config.py

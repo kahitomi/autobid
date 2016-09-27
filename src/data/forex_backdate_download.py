@@ -14,7 +14,7 @@ START_TIME = sys.argv[2]
 END_TIME = sys.argv[3]
 
 
-granularity = "M15"
+granularity = "S5"
 # Top of the minute alignment
 
 # “S5” - 5 seconds
@@ -50,7 +50,7 @@ granularity = "M15"
 
 
 output_path = "src/data/forex/"
-output_file_name = FOREX_NAME+"_"+START_TIME+"_"+END_TIME+".csv"
+output_file_name = "BACKDATE_"+FOREX_NAME+"_"+START_TIME+"_"+END_TIME+".csv"
 
 
 def main():

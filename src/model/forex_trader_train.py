@@ -22,10 +22,6 @@ from tensorflow.python.ops import variable_scope
 # from common import tf_serving
 # from tensorflow_serving.session_bundle import exporter
 
-import rnn_memory_classify as seq2seq_model
-# from IAS import tf_seq2seq_one2one as seq2seq_model
-# from IAS import word2vec, word_segmentation
-import time_align, norm, trade_points
 
 import matplotlib.pyplot as plt
 from matplotlib.finance import candlestick
@@ -35,32 +31,44 @@ import talib
 
 
 # from common import config
-
-if len(sys.argv) < 2:
-	raise ValueError("Please enter the action [train, test]")
-
-ACTION = sys.argv[1]
-
-if ACTION == "train":
-	if len(sys.argv) < 3:
-		raise ValueError("Please enter the source forex csv file name which should be in src/data/")
-
-	CSV_NAME = sys.argv[2]
-	SAVE_NAME = CSV_NAME.split(".")[0]
-
-if ACTION == "test":
-	TEST_CSV_NAME = "NZDUSD-2016-06-day1-test.csv"
-	if len(sys.argv) >= 4:
-		TEST_CSV_NAME = sys.argv[3]
-
-	if len(sys.argv) < 3:
-		raise ValueError("Please enter the model name")
-	else:
-		SAVE_NAME = sys.argv[2]
+if __name__ == "__main__":
+	import rnn_memory_classify as seq2seq_model
+	# from IAS import tf_seq2seq_one2one as seq2seq_model
+	# from IAS import word2vec, word_segmentation
+	import time_align, norm, trade_points
 
 
-SOURCE_PATH = "src/data/forex/"
+	if len(sys.argv) < 2:
+		raise ValueError("Please enter the action [train, test]")
 
+	ACTION = sys.argv[1]
+
+	if ACTION == "train":
+		if len(sys.argv) < 3:
+			raise ValueError("Please enter the source forex csv file name which should be in src/data/")
+
+		CSV_NAME = sys.argv[2]
+		SAVE_NAME = CSV_NAME.split(".")[0]
+
+	if ACTION == "test":
+		TEST_CSV_NAME = "NZDUSD-2016-06-day1-test.csv"
+		if len(sys.argv) >= 4:
+			TEST_CSV_NAME = sys.argv[3]
+
+		if len(sys.argv) < 3:
+			raise ValueError("Please enter the model name")
+		else:
+			SAVE_NAME = sys.argv[2]
+
+
+	SOURCE_PATH = "src/data/forex/"
+
+else:
+
+	from src.model import rnn_memory_classify as seq2seq_model
+	from src.model import time_align, norm, trade_points
+
+	SAVE_NAME = "relase"
 
 
 
@@ -89,41 +97,58 @@ sess_config = tf.ConfigProto()
 
 # We use a number of buckets and pad to the closest one for efficiency.
 # See seq2seq_model.Seq2SeqModel for details of how they work.
-_buckets = (5, 2)
+_buckets = (30, 2)
 bucket = _buckets
 
-tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
+FLAGS = {
+	"export_version": 0.05,
+	"learning_rate": 0.1,
+	"learning_rate_decay_factor": 0.99,
+	"max_gradient_norm": 5.0,
+	"batch_size": 20,
+	"size": 100,
+	"num_layers": 2,
+	"source_vocab_size": 9,
+	"target_vocab_size": 3,
+	"train_dir": "src/model/forex_trader/"+SAVE_NAME,
+	"max_train_data_size": 0,
+	"steps_per_checkpoint": 3000,
+	"decode": False,
+	"self_test": False
+}
+
+# tf.app.flags.DEFINE_float("export_version", 0.05, "Export version.")
 
 
-tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
-tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
+# tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
+# tf.app.flags.DEFINE_float("learning_rate_decay_factor", 0.99, "Learning rate decays by this much.")
 
-tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
+# tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 
-# tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("batch_size", 20, "Batch size to use during training.")
+# # tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
+# tf.app.flags.DEFINE_integer("batch_size", 20, "Batch size to use during training.")
 
-tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
+# tf.app.flags.DEFINE_integer("size", 100, "Size of each model layer.")
 
-tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
-# tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
-# tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
-tf.app.flags.DEFINE_integer("source_vocab_size", 10, "English vocabulary size.")
-tf.app.flags.DEFINE_integer("target_vocab_size", 3, "French vocabulary size.")
+# tf.app.flags.DEFINE_integer("num_layers", 2, "Number of layers in the model.")
+# # tf.app.flags.DEFINE_integer("source_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "English vocabulary size.")
+# # tf.app.flags.DEFINE_integer("target_vocab_size", BASE_LENGTH*SECOND_VOLUME*NUMBER_SPLIT, "French vocabulary size.")
+# tf.app.flags.DEFINE_integer("source_vocab_size", 10, "English vocabulary size.")
+# tf.app.flags.DEFINE_integer("target_vocab_size", 2, "French vocabulary size.")
 
 # tf.app.flags.DEFINE_string("data_dir", "src/model/forex/"+SAVE_NAME, "Data directory")
-tf.app.flags.DEFINE_string("train_dir", "src/model/forex_trader/"+SAVE_NAME, "Training directory.")
+# tf.app.flags.DEFINE_string("train_dir", "src/model/forex_trader/"+SAVE_NAME, "Training directory.")
 
-tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
+# tf.app.flags.DEFINE_integer("max_train_data_size", 0, "Limit on the size of training data (0: no limit).")
 
-# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 8800, "How many training steps to do per checkpoint.")
+# # tf.app.flags.DEFINE_integer("steps_per_checkpoint", 8800, "How many training steps to do per checkpoint.")
 
-tf.app.flags.DEFINE_integer("steps_per_checkpoint", 3000, "How many training steps to do per checkpoint.")
+# tf.app.flags.DEFINE_integer("steps_per_checkpoint", 3000, "How many training steps to do per checkpoint.")
 
-tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
-tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
+# tf.app.flags.DEFINE_boolean("decode", False, "Set to True for interactive decoding.")
+# tf.app.flags.DEFINE_boolean("self_test", False, "Run a self-test if this is set to True.")
 
-FLAGS = tf.app.flags.FLAGS
+# # FLAGS = tf.app.flags.FLAGS
 
 
 
@@ -235,8 +260,8 @@ def read_data(source_path, max_size=None, test=None):
 
 
 
-	plt.grid(True)
-	plt.show()
+	# plt.grid(True)
+	# plt.show()
 
 
 	data_close = np.array(data_close)
@@ -311,14 +336,14 @@ def read_data(source_path, max_size=None, test=None):
 
 
 
-def create_model(session, forward_only):
+def create_model(session, forward_only, batch_size=FLAGS["batch_size"], model_name = SAVE_NAME):
 	"""Create translation model and initialize or load parameters in session."""
 	model = seq2seq_model.Seq2SeqModel(
-			FLAGS.source_vocab_size, FLAGS.target_vocab_size, _buckets,
-			FLAGS.size, FLAGS.num_layers, FLAGS.max_gradient_norm, FLAGS.batch_size,
-			FLAGS.learning_rate, FLAGS.learning_rate_decay_factor,
+			FLAGS["source_vocab_size"], FLAGS["target_vocab_size"], _buckets,
+			FLAGS["size"], FLAGS["num_layers"], FLAGS["max_gradient_norm"], batch_size,
+			FLAGS["learning_rate"], FLAGS["learning_rate_decay_factor"],
 			forward_only=forward_only)
-	ckpt = tf.train.get_checkpoint_state(FLAGS.train_dir)
+	ckpt = tf.train.get_checkpoint_state("src/model/forex_trader/"+model_name)
 	if ckpt:
 	# if ckpt and tf.gfile.Exists(ckpt.model_checkpoint_path):
 		print("Reading model parameters from %s" % ckpt.model_checkpoint_path)
@@ -327,7 +352,7 @@ def create_model(session, forward_only):
 		if not forward_only:
 			# set new learning rate
 			print("Old Learning Rate: ",model.learning_rate.eval(session=session))
-			new_learning_rate = tf.Variable(float(FLAGS.learning_rate), trainable=False)
+			new_learning_rate = tf.Variable(float(FLAGS["learning_rate"]), trainable=False)
 			op = tf.assign(model.learning_rate, new_learning_rate)
 			op_init = tf.initialize_variables([new_learning_rate])
 			session.run([op_init])
@@ -452,7 +477,7 @@ def get_batch(data_set):
 	decoder_inputs = [ [] for x in range(bucket[1]) ]
 
 
-	for x in range(FLAGS.batch_size):
+	for x in range(FLAGS["batch_size"]):
 		seed = random.randint(0, data_set_size-1-((bucket[0]+bucket[1])*BASE_LENGTH/DATA_DIS))
 
 		l_index = int(seed+(bucket[0]-1)*BASE_LENGTH/DATA_DIS)
@@ -500,8 +525,8 @@ def get_batch(data_set):
 
 
 			if bucket_id < bucket[0]:
-				# _input = [_avr_clo, _avr_ema, _avr_ema_s, _avr_wil, _avr_rsi]
-				_input = [_avr_clo, _avr_ema, _avr_ema_s, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
+				_input = [_avr_clo, _avr_ema, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
+				# _input = [_avr_clo, _avr_ema, _avr_ema_s, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
 				encoder_inputs[bucket_id].append(_input)
 			else:
 				_input = _avr_tra
@@ -514,7 +539,7 @@ def get_batch(data_set):
 	decoder_inputs = decoder_inputs[:-1]
 	# print( np.array(decoder_inputs).shape )
 	# add GO symble
-	GO = [[[0.0 for x in range(FLAGS.target_vocab_size)] for x in range(FLAGS.batch_size)]]
+	GO = [[[0.0 for x in range(FLAGS["target_vocab_size"])] for x in range(FLAGS["batch_size"])]]
 	# print( np.array(GO).shape )
 	decoder_inputs =  GO + decoder_inputs
 
@@ -536,7 +561,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 
 	with tf.Session() as sess:
 		# Create model.
-		print("Creating %d layers of %d units." % (FLAGS.num_layers, FLAGS.size))
+		print("Creating %d layers of %d units." % (FLAGS["num_layers"], FLAGS["size"]))
 		model = create_model(sess, False)
 
 		# Read data into buckets and compute their sizes.
@@ -569,9 +594,9 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			# print("Gradient norm",stepout[0])
 			# print("step_loss",stepout[1])
 			# print ("-----STEP TIME",time.time()-start_time)
-			step_time += (time.time() - start_time) / FLAGS.steps_per_checkpoint
+			step_time += (time.time() - start_time) / FLAGS["steps_per_checkpoint"]
 			step_time_mini += (time.time() - start_time) / 10.0
-			loss += np.average(stepout[1]) / FLAGS.steps_per_checkpoint
+			loss += np.average(stepout[1]) / FLAGS["steps_per_checkpoint"]
 
 
 
@@ -610,10 +635,10 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 
 			# true_accuracy = float(np.sum(results))/float((model.bucket[1]-1)*model.batch_size*model.output_size)
 
-			accuracy += true_accuracy / FLAGS.steps_per_checkpoint
+			accuracy += true_accuracy / FLAGS["steps_per_checkpoint"]
 
 			# _error = np.average(np.absolute(np.array(p_out) - np.array(t_out)))
-			# error += _error / FLAGS.steps_per_checkpoint
+			# error += _error / FLAGS["steps_per_checkpoint"]
 			current_step += 1
 
 			# Once in a while, we save checkpoint, print statistics, and run evals.
@@ -623,7 +648,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 			# if current_step % 10 == 0:
 			# 	# print ("#########STEP TIME",step_time_mini)
 			# 	step_time_mini = 0.0
-			if current_step % FLAGS.steps_per_checkpoint == 0:	
+			if current_step % FLAGS["steps_per_checkpoint"] == 0:	
 
 				# print(p_out)
 				# print(t_out)
@@ -650,7 +675,7 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 					sess.run(model.learning_rate_decay_op)
 				previous_losses.append(loss)
 				# Save checkpoint and zero timer and loss.
-				checkpoint_path = os.path.join(FLAGS.train_dir, "forex.ckpt")
+				checkpoint_path = os.path.join(FLAGS["train_dir"], "forex.ckpt")
 				if IFSAVE:
 					model.saver.save(sess, checkpoint_path, global_step=model.global_step)
 				step_time, loss = 0.0, 0.0
@@ -717,168 +742,57 @@ def train(differ_mm=differ_mm, VOLUME_differ=VOLUME_differ):
 				VOLUME_differ = []
 
 
+class decoder():
 
-def s2s(model, id_list):
-	id_list.append(EOS)
+	# 初始化
+	def __init__(self, model_name):
 
-	encoder_input = tf.placeholder(tf.int32, shape=[None],name="encoder_input")
-	decoder_input = tf.placeholder(tf.int32, shape=[None],name="decoder_input")
-	decode_input = seq2seq_model.data_utils["GO_ID"]
+		sess = tf.InteractiveSession()
+		self.model = create_model(sess, True, batch_size = 1, model_name = model_name)
+		self.sess = sess
 
-	with variable_scope.variable_scope("embedding_attention_seq2seq"):
-		# Encoder.
-		encoder_cell = tf.get_variable("encoder_cell")
-		print(encoder_cell)
+	# 预测
+	def decode(self, data_close, data_EMAs, data_EMA, data_WILLR, data_RSI, data_slowk, data_slowd, data_macd, data_macdsignal, data_macdhist):
+		if len(data_EMA) < bucket[0]+33:
+			print("长度不符合")
+			return False
 
-		# encoder_cell = rnn_cell.EmbeddingWrapper(
-		# 	cell, embedding_classes=num_encoder_symbols,
-		# 	embedding_size=embedding_size)
-		# encoder_outputs, encoder_state = rnn.rnn(
-		# 	encoder_cell, encoder_inputs, dtype=dtype)
+		encoder_inputs = [ [] for x in range(bucket[0]) ]
+		decoder_inputs = [ [] for x in range(bucket[1]) ]
+		start_price_s = data_EMAs[-1]
+		start_price = data_EMA[-1]
+		base_point = -bucket[0]
+		for bucket_id in range(bucket[0]):
 
-
-		# for x in reversed(id_list):
-			
-
-		# 	# First calculate a concatenation of encoder outputs to put attention on.
-		# 	top_states = [array_ops.reshape(e, [-1, 1, cell.output_size])
-		# 	          for e in encoder_outputs]
-		# 	attention_states = array_ops.concat(1, top_states)
-
-
-		# 	break
-
-
-def decode(questions):
-	# with tfec2.TFEc2() as sess:
-	with tf.Session("grpc://"+gpu_address+":2222") as sess:
-	# with tf.Session() as sess:
-		# Create model and load parameters.
-		model = create_model(sess, True)
-		model.batch_size = 1  # We decode one sentence at a time.
-
-		# # Load vocabularies.
-		# en_vocab_path = os.path.join(FLAGS.data_dir, "vocab%d.en" % FLAGS.source_vocab_size)
-		# fr_vocab_path = os.path.join(FLAGS.data_dir, "vocab%d.fr" % FLAGS.target_vocab_size)
-		# en_vocab, _ = data_utils.initialize_vocabulary(en_vocab_path)
-		# _, rev_fr_vocab = data_utils.initialize_vocabulary(fr_vocab_path)
-
-		# Decode from standard input.
-		sys.stdout.write("> ")
-		sys.stdout.flush()
-		# sentence = sys.stdin.readline()
-
-		# 瞎写
-		for question in questions:
-			print("++++++++++++++++++++")
-			# print (question)
-			words_list = word_segmentation.word_cuter(question).split()
-			print (word_segmentation.word_cuter(question))
-			id_list = []
-			for x in words_list:
-				try:
-					id_list.append(word2vec.my_dictionary.token2id[x.decode("utf-8")])
-				except:
-					id_list.append(len(word2vec.my_dictionary.token2id)+999)
-			# print (id_list)
-
-			# s2s(model, id_list)
-
-			token_ids = np.array(id_list)
-
-			# print (token_ids)
-
-			# # Get token-ids for the input sentence.
-			# token_ids = data_utils.sentence_to_token_ids(sentence, en_vocab)
-			# Which bucket does it belong to?
-			bucket_id = min([b for b in xrange(len(_buckets))
-											 if _buckets[b][0] > len(token_ids)])
-			# Get a 1-element batch to feed the sentence to the model.
-
-			encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-					{bucket_id: [(token_ids, np.array([]))]}, bucket_id, sess)
-			# Get output logits for the sentence.
-			_, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, True)
-
-			# print (output_logits)
-			# print (len(output_logits[0]))
-
-			# # This is a greedy decoder - outputs are just argmaxes of output_logits.
-			outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-			# outputs = [int(np.argmax(logit, axis=0)) for logit in output_logits]
-			# print (outputs)
-
-			output_words = ""
-			for x in outputs:
-				if x == EOS:
-					output_words += "<EOS>"
-				elif x == word2vec.data_utils["EOT"]:
-					output_words += "<EOT>"
-				elif x == word2vec.data_utils["GO_ID"]:
-					output_words += "<GO>"
-				elif x == word2vec.data_utils["PAD_ID"]:
-					output_words += "<PAD>"
-				else:
-					output_words += word2vec.my_dictionary.get(int(x),"<unk>")
-			print (output_words)
-
-			# # If there is an EOS symbol in outputs, cut them at that point.
-			# if data_utils.EOS_ID in outputs:
-			# 	outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-			# # Print out French sentence corresponding to outputs.
-			# print(" ".join([rev_fr_vocab[output] for output in outputs]))
-			# print("> ", end="")
-			# sys.stdout.flush()
-			
-			# break
-
-		# test_set = read_data(config.source_path+"/IAS/source/dialog/", FLAGS.max_train_data_size, test=True)
-
-		# test_set = test_set[:10]
-		# while sentence in test_set:
-		# 	# Get token-ids for the input sentence.
-		# 	token_ids = sentence
-		# 	# Which bucket does it belong to?
-		# 	bucket_id = min([b for b in xrange(len(_buckets))
-		# 									 if _buckets[b][0] > len(token_ids)])
-		# 	# Get a 1-element batch to feed the sentence to the model.
-		# 	encoder_inputs, decoder_inputs, target_weights = model.get_batch(
-		# 			{bucket_id: [(token_ids, [])]}, bucket_id)
-		# 	# Get output logits for the sentence.
-		# 	_, _, output_logits = model.step(sess, encoder_inputs, decoder_inputs, target_weights, bucket_id, True)
-		# 	# This is a greedy decoder - outputs are just argmaxes of output_logits.
-		# 	outputs = [int(np.argmax(logit, axis=1)) for logit in output_logits]
-		# 	# If there is an EOS symbol in outputs, cut them at that point.
-		# 	if data_utils.EOS_ID in outputs:
-		# 		outputs = outputs[:outputs.index(data_utils.EOS_ID)]
-		# 	# Print out French sentence corresponding to outputs.
-		# 	print(" ".join([rev_fr_vocab[output] for output in outputs]))
-		# 	print("> ", end="")
-		# 	sys.stdout.flush()
-		# 	sentence = sys.stdin.readline()
+			_avr_clo = number_to_number(data_close[base_point+bucket_id], start_price)
+			_avr_emas = number_to_number(data_EMAs[base_point+bucket_id], start_price)
+			_avr_ema = number_to_number(data_EMA[base_point+bucket_id], start_price)
+			_avr_wil = data_WILLR[base_point+bucket_id]
+			_avr_rsi = data_RSI[base_point+bucket_id]
+			_avr_slowk = data_slowk[base_point+bucket_id]
+			_avr_slowd = data_slowd[base_point+bucket_id]
+			_avr_macd = data_macd[base_point+bucket_id]
+			_avr_macdsignal = data_macdsignal[base_point+bucket_id]
+			_avr_macdhist = data_macdhist[base_point+bucket_id]
 
 
-		# from tensorflow_serving.session_bundle import exporter
-		# print ('Exporting trained model to', export_path)
-		# saver = model.saver
-		# model_exporter = exporter.Exporter(saver)
-		# serving_inputs = {}
-		# for x in model.encoder_inputs:
-		# 	serving_inputs[x.name] = x
-		# # serving_decode_tensor = {}
-		# for x in model.decoder_inputs:
-		# 	serving_inputs[x.name] = x
-		# # serving_output_tensor = {}
-		# for j in model.outputs:
-		# 	for x in j:
-		# 		serving_inputs[x.name] = x
-		# print("create signature")
-		# signature = exporter.generic_signature(serving_inputs)
-		# print("exporter init")
-		# model_exporter.init(sess.graph.as_graph_def(),
-		#                     default_graph_signature=signature)
-		# print("export model")s
-		# model_exporter.export(export_path, tf.constant(FLAGS.export_version), sess)
+			_input = [_avr_clo, _avr_ema, _avr_emas, _avr_wil, _avr_rsi, _avr_slowk, _avr_slowd, _avr_macd, _avr_macdsignal, _avr_macdhist]
+
+			encoder_inputs[bucket_id].append(_input)
+		
+		decoder_inputs[bucket_id-bucket[0]].append(_input)
+
+		zeros = [[0.0 for x in range(FLAGS["target_vocab_size"])] for x in range(1)]
+		decoder_inputs =  [zeros for _ in range(bucket[1])]
+
+		# print (np.array(decoder_inputs).shape)
+
+		stepout = self.model.step(self.sess, encoder_inputs, decoder_inputs, True)
+
+		return stepout[2][:-1]
+
+	def close(self):
+		self.sess.close()
 
 
 def self_test():
@@ -888,7 +802,7 @@ def self_test():
 		# Create model with vocabularies of 10, 2 small buckets, 2 layers of 32.
 		model = create_model(sess, True)
 
-		model.batch_size = FLAGS.batch_size
+		model.batch_size = FLAGS["batch_size"]
 
 		test_set = read_data(SOURCE_PATH+TEST_CSV_NAME)
 
@@ -974,15 +888,17 @@ def self_test():
 
 			# print(results)
 
-
-			true_accuracy = float(np.sum(results))/float(model.batch_size)
+			if results.size == 0:
+				continue
+			else:
+				true_accuracy = float(np.sum(results))/float(results.size)
 
 
 			final_accu_collect[seed_wheel].append(true_accuracy)
 
 
 
-			break
+			# break
 
 			epo_counter+=1
 			# print (epo_counter)
